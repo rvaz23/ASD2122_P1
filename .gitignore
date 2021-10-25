@@ -1,6 +1,6 @@
 # Compiled class file
 *.class
-.ideia/*
+.idea/*
 /target/*
 
 # Log file
