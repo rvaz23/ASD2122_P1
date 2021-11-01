@@ -18,7 +18,7 @@ public class ChordApplication extends GenericProtocol {
 
     private long predecessor, successor;
     private HashMap<Long, InetAddress> fingerTable;
-    
+
     //Variables related with measurement
     private long storeRequests = 0;
     private long storeRequestsCompleted = 0;
