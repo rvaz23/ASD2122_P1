@@ -6,6 +6,8 @@ import org.apache.logging.log4j.Logger;
 
 import protocols.dht.replies.LookupReply;
 import protocols.dht.requests.LookupRequest;
+import protocols.storage.StorageEntry;
+import protocols.storage.messages.RetrieveMessage;
 import protocols.storage.replies.RetrieveOKReply;
 import protocols.storage.replies.StoreOKReply;
 import protocols.storage.requests.RetrieveRequest;
@@ -34,7 +36,7 @@ public class StorageProtocol extends GenericProtocol {
     private static short appProtoId;
     private final int channelId;
     
-    private Map<String,byte[]> storage;
+    private Map<String, StorageEntry> storage;
 
     private final Host self;
 
@@ -43,7 +45,7 @@ public class StorageProtocol extends GenericProtocol {
         this.dhtProtoId = dhtProtoId;
         this.appProtoId = appProtoId;
         this.self = self;
-        this.storage= new  TreeMap<String,byte[]>();
+        this.storage= new  TreeMap<String,StorageEntry>();
 
         Properties channelProps = new Properties();
         channelId = createChannel(TCPChannel.NAME, channelProps);
@@ -75,11 +77,16 @@ public class StorageProtocol extends GenericProtocol {
     private void uponLookUpResponse(LookupReply reply, short sourceProto) {
         logger.info("{}: LookUp response from content with peer: {} (replyID {})", self, reply.getPeer(), reply.getReplyUID());
         //processar a informação e pedir ao peer o conteudo
+        //CRIAR RETRIEVE MESSAGE
+        RetrieveMessage retrieveMessage = new RetrieveMessage(reply.getReplyUID(),self,reply.getID());
+        Host dest = new Host(peer);
+        sendMessage(retrieveMessage,);
     }
     
     /*--------------------------------- Requests ---------------------------------------- */
     private void uponStoreRequest(StoreRequest request, short sourceProto) {
-    	storage.put(request.getName(), request.getContent()); 	
+        StorageEntry storageEntry = new StorageEntry(request.getName(), request.getContent());
+    	storage.put(request.getName(), storageEntry);
     	 logger.info("{}: Store completed: {} ", self, request.getRequestUID());
     	 StoreOKReply reply = new StoreOKReply(request.getName(), request.getRequestUID());
     	 sendReply(reply, sourceProto);
@@ -87,13 +94,13 @@ public class StorageProtocol extends GenericProtocol {
     }
     
     private void uponRetrieveRequest(RetrieveRequest request, short sourceProto) {
-    	//pedir DHT LOCALIZAÇÃO DO PEER
         BigInteger id= HashGenerator.generateHash(request.getName());
         if(storage.containsKey(id)){
-            RetrieveOKReply retrieveOk = new RetrieveOKReply(request.getName(), request.getRequestUID(),storage.get(id));
+            StorageEntry storageEntry =storage.get(id);
+            RetrieveOKReply retrieveOk = new RetrieveOKReply(storageEntry.getName(), request.getRequestUID(),storageEntry.getContent());
             sendReply(retrieveOk,sourceProto);
         }else{
-            LookupRequest lookupRequest = new LookupRequest(id);
+            LookupRequest lookupRequest = new LookupRequest(id,request.getRequestUID());
             sendRequest(lookupRequest,dhtProtoId);
         }
 
