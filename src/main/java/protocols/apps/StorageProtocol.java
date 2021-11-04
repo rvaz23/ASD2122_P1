@@ -78,9 +78,9 @@ public class StorageProtocol extends GenericProtocol {
         logger.info("{}: LookUp response from content with peer: {} (replyID {})", self, reply.getPeer(), reply.getReplyUID());
         //processar a informação e pedir ao peer o conteudo
         //CRIAR RETRIEVE MESSAGE
-        RetrieveMessage retrieveMessage = new RetrieveMessage(reply.getReplyUID(),self,reply.getID());
+        RetrieveMessage retrieveMessage = new RetrieveMessage(reply.getReplyUID(),self,PROTO_ID,reply.getID());
         Host dest = new Host(peer);
-        sendMessage(retrieveMessage,);
+        sendMessage(retrieveMessage,dest);
     }
     
     /*--------------------------------- Requests ---------------------------------------- */
