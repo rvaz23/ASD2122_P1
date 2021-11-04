@@ -31,15 +31,17 @@ public class StorageProtocol extends GenericProtocol {
     public static final short PROTO_ID = 301;
 
     private static short dhtProtoId;
+    private static short appProtoId;
     private final int channelId;
     
     private Map<String,byte[]> storage;
 
     private final Host self;
 
-    public StorageProtocol(Host self, Properties properties, short dhtProtoId) throws IOException, HandlerRegistrationException {
+    public StorageProtocol(Host self, Properties properties,short appProtoId, short dhtProtoId) throws IOException, HandlerRegistrationException {
         super(PROTO_NAME, PROTO_ID);
         this.dhtProtoId = dhtProtoId;
+        this.appProtoId = appProtoId;
         this.self = self;
         this.storage= new  TreeMap<String,byte[]>();
 

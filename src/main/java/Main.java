@@ -6,6 +6,7 @@ import org.apache.logging.log4j.Logger;
 
 import protocols.apps.AutomatedApplication;
 import protocols.apps.StorageProtocol;
+import protocols.apps.chord.ChordProtocol;
 import pt.unl.fct.di.novasys.babel.core.Babel;
 import pt.unl.fct.di.novasys.network.data.Host;
 import utils.InterfaceToIp;
@@ -44,12 +45,11 @@ public class Main {
         logger.info("Hello, I am {}", myself);
 
         // Application
-        AutomatedApplication app = new AutomatedApplication(myself, props, (short) 0 /**change this parameter to map the id of the Storage Protocol**/);
+        AutomatedApplication app = new AutomatedApplication(myself, props, StorageProtocol.PROTO_ID /**change this parameter to map the id of the Storage Protocol**/);
         // Storage Protocol
-        StorageProtocol storage = new StorageProtocol(myself,props,(short)1); /**You need to uncomment this line and define the protocol**/
+        StorageProtocol storage = new StorageProtocol(myself,props,AutomatedApplication.PROTO_ID, ChordProtocol.PROTO_ID); /**You need to uncomment this line and define the protocol**/
         // DHT Protocol
         //DHTProtocol dht = new ...; /**You need to uncomment this line and define the protocol**/
-
         //Register applications in babel
         babel.registerProtocol(app);
         /** You need to uncomment the next two lines when you have protocols to fill those gaps **/

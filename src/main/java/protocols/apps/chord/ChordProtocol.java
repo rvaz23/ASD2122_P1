@@ -9,8 +9,9 @@ import java.util.Properties;
 
 public class ChordProtocol extends GenericProtocol {
 
-    private static final String PROTO_NAME = "ChordApplication";
-    private static final short PROTO_ID = 301;
+    public static final String PROTO_NAME = "ChordApplication";
+    public static final short PROTO_ID = 301;
+
 
     private ChordProtocol predecessor, successor;
     private long selfID;
