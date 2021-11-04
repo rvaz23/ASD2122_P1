@@ -4,8 +4,9 @@ import channel.notifications.ChannelCreated;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import protocols.broadcast.common.DeliverNotification;
 import protocols.dht.replies.LookupReply;
+import protocols.dht.requests.LookupRequest;
+import protocols.storage.replies.RetrieveOKReply;
 import protocols.storage.replies.StoreOKReply;
 import protocols.storage.requests.RetrieveRequest;
 import protocols.storage.requests.StoreRequest;
@@ -29,16 +30,16 @@ public class StorageProtocol extends GenericProtocol {
     public static final String PROTO_NAME = "StorageApp";
     public static final short PROTO_ID = 301;
 
-    private static short storageProtoId;
+    private static short dhtProtoId;
     private final int channelId;
     
     private Map<String,byte[]> storage;
 
     private final Host self;
 
-    public StorageProtocol(Host self, Properties properties, short storageProtoId) throws IOException, HandlerRegistrationException {
+    public StorageProtocol(Host self, Properties properties, short dhtProtoId) throws IOException, HandlerRegistrationException {
         super(PROTO_NAME, PROTO_ID);
-        this.storageProtoId = storageProtoId;
+        this.dhtProtoId = dhtProtoId;
         this.self = self;
         this.storage= new  TreeMap<String,byte[]>();
 
@@ -71,6 +72,7 @@ public class StorageProtocol extends GenericProtocol {
 
     private void uponLookUpResponse(LookupReply reply, short sourceProto) {
         logger.info("{}: LookUp response from content with peer: {} (replyID {})", self, reply.getPeer(), reply.getReplyUID());
+        //processar a informação e pedir ao peer o conteudo
     }
     
     /*--------------------------------- Requests ---------------------------------------- */
@@ -84,6 +86,15 @@ public class StorageProtocol extends GenericProtocol {
     
     private void uponRetrieveRequest(RetrieveRequest request, short sourceProto) {
     	//pedir DHT LOCALIZAÇÃO DO PEER
+        BigInteger id= HashGenerator.generateHash(request.getName());
+        if(storage.containsKey(id)){
+            RetrieveOKReply retrieveOk = new RetrieveOKReply(request.getName(), request.getRequestUID(),storage.get(id));
+            sendReply(retrieveOk,sourceProto);
+        }else{
+            LookupRequest lookupRequest = new LookupRequest(id);
+            sendRequest(lookupRequest,dhtProtoId);
+        }
+
     }
 
 
