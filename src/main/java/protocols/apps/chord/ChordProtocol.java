@@ -259,17 +259,30 @@ public class ChordProtocol extends GenericProtocol {
         Host peer = event.getNode();
         logger.debug("Connection to {} is down cause {}", peer, event.getCause());
 
-        //perdeu ligaçao com successor
+        //checks if the peer is my successor
         if (peer == successor) {
-            //todo: my successor will be replaced with the first live entry of my successor
-            FindSuccessorMessage findSuccessorMessage = new FindSuccessorMessage(UUID.randomUUID(), self, self.hashCode(), PROTO_ID);
-            sendMessage(findSuccessorMessage, self);
+            int firstFingerKey = (int) fingerTable.keySet().toArray()[0];
+
+            //checks if my first finger isn't the failed successor
+            if (peer.hashCode() == firstFingerKey)
+                firstFingerKey = (int) fingerTable.keySet().toArray()[1];
+
+            Host firstFinger = fingerTable.get(firstFingerKey);
+            FindSuccessorMessage findSuccessorMessage =
+                    new FindSuccessorMessage(UUID.randomUUID(), self, firstFingerKey, PROTO_ID);
+            sendMessage(findSuccessorMessage, firstFinger);
         }
     }
 
     private void uponOutConnectionFailed(OutConnectionFailed<ProtoMessage> event, int channelId) {
+        Host peer = event.getNode();
         logger.debug("Connection to {} failed cause: {}", event.getNode(), event.getCause());
-        //todo what appends when connection fails?
+
+        //connection with successor failed
+        if (peer == successor) {
+
+        }
+
     }
 
     private void uponOutConnectionUp(OutConnectionUp event, int channelId) {
