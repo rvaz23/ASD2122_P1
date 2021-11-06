@@ -15,12 +15,12 @@ public class SuccessorFoundMessage extends ProtoMessage{
 
     private final UUID mid;
     private final Host successor;
-    private final Host ofNode;
+    private final int ofNode;
 
     private final short toDeliver;
 
 
-    public SuccessorFoundMessage(UUID mid, Host successor,Host ofNode, short toDeliver) {
+    public SuccessorFoundMessage(UUID mid, Host successor,int ofNode, short toDeliver) {
         super(MSG_ID);
         this.mid = mid;
         this.successor = successor;
@@ -40,7 +40,7 @@ public class SuccessorFoundMessage extends ProtoMessage{
         return toDeliver;
     }
 
-    public Host getOfNode() {
+    public int getOfNode() {
         return ofNode;
     }
 
@@ -51,7 +51,7 @@ public class SuccessorFoundMessage extends ProtoMessage{
             out.writeLong(findSuccessorMessage.mid.getLeastSignificantBits());
             Host.serializer.serialize(findSuccessorMessage.successor, out);
             out.writeShort(findSuccessorMessage.toDeliver);
-            Host.serializer.serialize(findSuccessorMessage.ofNode, out);
+            out.writeInt(findSuccessorMessage.ofNode);
 
 
             /*out.writeInt(floodMessage.content.length);
@@ -68,7 +68,7 @@ public class SuccessorFoundMessage extends ProtoMessage{
             UUID mid = new UUID(firstLong, secondLong);
             Host sucessor = Host.serializer.deserialize(in);
             short toDeliver = in.readShort();
-            Host ofNode = Host.serializer.deserialize(in);
+            int ofNode = in.readInt();
 
             return new SuccessorFoundMessage(mid, sucessor,ofNode, toDeliver);
         }
