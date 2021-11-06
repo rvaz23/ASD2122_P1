@@ -30,7 +30,7 @@ public class StorageProtocol extends GenericProtocol {
     private static final Logger logger = LogManager.getLogger(StorageProtocol.class);
 
     public static final String PROTO_NAME = "StorageApp";
-    public static final short PROTO_ID = 301;
+    public static final short PROTO_ID = 302;
 
     private static short dhtProtoId;
     private static short appProtoId;
@@ -79,8 +79,8 @@ public class StorageProtocol extends GenericProtocol {
         //processar a informação e pedir ao peer o conteudo
         //CRIAR RETRIEVE MESSAGE
         RetrieveMessage retrieveMessage = new RetrieveMessage(reply.getReplyUID(),self,PROTO_ID,reply.getID());
-        Host dest = new Host(peer);
-        sendMessage(retrieveMessage,dest);
+        sendMessage(retrieveMessage, reply.getPeer());
+        //WAIT FOR MESSAGE OR PROCESS RESPONSE ON UPON_SOMETHING
     }
     
     /*--------------------------------- Requests ---------------------------------------- */

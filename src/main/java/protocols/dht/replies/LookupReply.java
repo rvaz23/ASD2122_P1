@@ -2,6 +2,7 @@ package protocols.dht.replies;
 
 import protocols.storage.replies.RetrieveFailedReply;
 import pt.unl.fct.di.novasys.babel.generic.ProtoReply;
+import pt.unl.fct.di.novasys.network.data.Host;
 
 import java.math.BigInteger;
 import java.util.UUID;
@@ -12,9 +13,9 @@ public class LookupReply extends ProtoReply {
 
     private BigInteger id;
     private UUID uid;
-    private String peer;
+    private Host peer;
 
-    public LookupReply(BigInteger id, String peer, UUID uid) {
+    public LookupReply(BigInteger id, Host peer, UUID uid) {
         super(LookupReply.REPLY_ID);
         this.id = id;
         this.peer = peer;
@@ -29,8 +30,7 @@ public class LookupReply extends ProtoReply {
         return this.id;
     }
 
-    public String getPeer() {
-        return this.peer;
+    public Host getPeer() {
+        return peer;
     }
-
 }
