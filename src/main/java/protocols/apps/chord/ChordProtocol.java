@@ -225,11 +225,19 @@ public class ChordProtocol extends GenericProtocol {
                 sendMessage(successorFoundMessage, msg.getSender());
             } else {
                 //TODO PEDIR AO FINGERtable ANTERIOR AO node findSuccessor
-                sendMessage(msg,nodeToAsk);
+                if(nodeToAsk!=null){
+                    sendMessage(msg,nodeToAsk);
+                }else{
+                    sendMessage(msg,successor);
+                }
             }
         } else {
             //TODO PEDIR AO FINGERtable ANTERIOR AO node findSuccessor
-            sendMessage(msg,nodeToAsk);
+            if(nodeToAsk!=null){
+                sendMessage(msg,nodeToAsk);
+            }else{
+                sendMessage(msg,successor);
+            }
         }
 
     }
