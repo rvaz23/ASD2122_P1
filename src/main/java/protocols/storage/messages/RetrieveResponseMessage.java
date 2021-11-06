@@ -10,7 +10,7 @@ import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
-public class RetrieveResponseMessage {
+public class RetrieveResponseMessage extends ProtoMessage {
 
 
     public static final short MSG_ID = 202;
@@ -26,6 +26,7 @@ public class RetrieveResponseMessage {
     private final byte[] content;
 
     public RetrieveResponseMessage(UUID mid, Host sender, short toDeliver, BigInteger cid, String name, byte[] content) {
+        super(MSG_ID);
         this.mid = mid;
         this.sender = sender;
         this.toDeliver=toDeliver;

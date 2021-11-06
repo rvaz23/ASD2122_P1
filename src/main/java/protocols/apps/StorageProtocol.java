@@ -4,10 +4,12 @@ import channel.notifications.ChannelCreated;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import protocols.dht.messages.FindSuccessorMessage;
 import protocols.dht.replies.LookupReply;
 import protocols.dht.requests.LookupRequest;
 import protocols.storage.StorageEntry;
 import protocols.storage.messages.RetrieveMessage;
+import protocols.storage.messages.RetrieveResponseMessage;
 import protocols.storage.replies.RetrieveOKReply;
 import protocols.storage.replies.StoreOKReply;
 import protocols.storage.requests.RetrieveRequest;
@@ -58,6 +60,10 @@ public class StorageProtocol extends GenericProtocol {
         
         /*----------------------- Register Reply Handlers ----------------------------- */
         registerReplyHandler(LookupReply.REPLY_ID, this::uponLookUpResponse);
+
+        /*---------------------- Register Message Serializers ---------------------- */
+        registerMessageSerializer(channelId, RetrieveMessage.MSG_ID, RetrieveMessage.serializer);
+        registerMessageSerializer(channelId, RetrieveResponseMessage.MSG_ID, RetrieveResponseMessage.serializer);
 
         subscribeNotification(ChannelCreated.NOTIFICATION_ID, this::uponChannelCreated);
 

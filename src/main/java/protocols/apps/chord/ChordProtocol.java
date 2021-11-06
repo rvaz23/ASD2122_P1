@@ -4,6 +4,7 @@ import channel.notifications.ChannelCreated;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import protocols.dht.messages.FindSuccessorMessage;
+import protocols.dht.messages.SuccessorFoundMessage;
 import pt.unl.fct.di.novasys.babel.core.GenericProtocol;
 import pt.unl.fct.di.novasys.babel.exceptions.HandlerRegistrationException;
 import pt.unl.fct.di.novasys.channel.tcp.TCPChannel;
@@ -13,10 +14,7 @@ import utils.HashProducer;
 
 import java.io.IOException;
 import java.net.InetAddress;
-import java.util.HashMap;
-import java.util.Properties;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 public class ChordProtocol extends GenericProtocol {
 
@@ -32,7 +30,7 @@ public class ChordProtocol extends GenericProtocol {
     private boolean hasFailed;
     private long next;
     private Host self;
-    private final HashMap<Long,Host> fingerTable; //Peers I am connected to
+    private final HashMap<Integer, Host> fingerTable; //Peers I am connected to
 
     private final int sampleTime; //param: timeout for samples
     private final int subsetSize; //param: maximum size of sample;
@@ -46,11 +44,11 @@ public class ChordProtocol extends GenericProtocol {
 
     private final int channelId; //Id of the created channel
 
-    public ChordProtocol(Properties properties,Host self) throws IOException {
+    public ChordProtocol(Properties properties, Host self) throws IOException, HandlerRegistrationException {
         super(PROTO_NAME, PROTO_ID);
-        this.self=self;
-        this.selfID= self.hashCode();
-        this.fingerTable = new HashMap<Long,Host>();
+        this.self = self;
+        this.selfID = self.hashCode();
+        this.fingerTable = new HashMap<Integer, Host>();
         predecessor = null;
         successor = null;
 
@@ -73,9 +71,11 @@ public class ChordProtocol extends GenericProtocol {
 
         /*---------------------- Register Message Serializers ---------------------- */
         registerMessageSerializer(channelId, FindSuccessorMessage.MSG_ID, FindSuccessorMessage.serializer);
+        registerMessageSerializer(channelId, SuccessorFoundMessage.MSG_ID, SuccessorFoundMessage.serializer);
 
         /*---------------------- Register Message Handlers -------------------------- */
-        registerMessageHandler(channelId, SampleMessage.MSG_ID, this::uponSample, this::uponMsgFail);
+        registerMessageHandler(channelId, FindSuccessorMessage.MSG_ID, this::uponFindSuccessor);//, this::uponMsgFail);
+        registerMessageHandler(channelId, SuccessorFoundMessage.MSG_ID, this::uponFoundSuccessor);
 
         /*--------------------- Register Timer Handlers ----------------------------- */
         registerTimerHandler(SampleTimer.TIMER_ID, this::uponSampleTimer);//Stabilize / finger refresh
@@ -174,13 +174,64 @@ public class ChordProtocol extends GenericProtocol {
     private void uponOutConnectionUp(OutConnectionUp event, int channelId) {
         Host peer = event.getNode();
         logger.debug("Connection to {} is up", peer);
-        //Verificar se ID maior que o meu, se for
-        if(self.compareTo(peer)>0){
+        //Verificar se ID nao é conhecido peer!=fingertable
+        if (peer != successor) {
             UUID uuid = UUID.randomUUID();
-            FindSuccessorMessage findSuccessorMessage = new FindSuccessorMessage(uuid,self,PROTO_ID);
-            sendMessage(findSuccessorMessage,peer);
-        }else{
-            successor=peer;
+            FindSuccessorMessage findSuccessorMessage = new FindSuccessorMessage(uuid, self, self, PROTO_ID);
+            sendMessage(findSuccessorMessage, peer);
+        }
+
+    }
+
+    private int getPreviousOnFingerTable(Host node) {
+        int val = node.hashCode();
+        int current = -1;
+        int max = -1;
+        List<Integer> keys = (List<Integer>) fingerTable.keySet();
+        for (Integer key : keys) {
+            if (key < val)
+                current = key;
+            max = key;
+        }
+        if (current == -1) {
+            return max;
+        } else {
+            return current;
+        }
+    }
+
+
+
+    private void uponFoundSuccessor(SuccessorFoundMessage msg, Host from, short sourceProto, int channelId) {
+        if (msg.getOfNode()==self){
+            if (successor==null){
+                successor= msg.getSuccessor();
+                //predecessor=from;
+            }else{
+                //Oque fazer??o que pode acontecer??
+            }
+        }
+        //adicionar a fingertable
+        fingerTable.put(msg.getSuccessor().hashCode(),msg.getSuccessor());
+    }
+
+    private void uponFindSuccessor(FindSuccessorMessage msg, Host from, short sourceProto, int channelId) {
+        Host nodeToAsk;
+        int key = getPreviousOnFingerTable(msg.getOfNode());
+            nodeToAsk = fingerTable.get(key);
+        if (self.compareTo(msg.getOfNode()) < 0) {
+            if (successor.compareTo(msg.getOfNode()) > 0 || successor.compareTo(self) < 0) {//Verifica se o sucessor é menor que eu, caso de dar a volta ao anel
+                //Trigger response
+                //TODO RETURN successor
+                SuccessorFoundMessage successorFoundMessage = new SuccessorFoundMessage(msg.getMid(),successor,msg.getOfNode(),msg.getToDeliver());
+                sendMessage(successorFoundMessage, msg.getSender());
+            } else {
+                //TODO PEDIR AO FINGERtable ANTERIOR AO node findSuccessor
+                sendMessage(msg,nodeToAsk);
+            }
+        } else {
+            //TODO PEDIR AO FINGERtable ANTERIOR AO node findSuccessor
+            sendMessage(msg,nodeToAsk);
         }
 
     }

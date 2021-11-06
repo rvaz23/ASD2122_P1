@@ -1,30 +1,29 @@
 package protocols.dht.messages;
 
 import io.netty.buffer.ByteBuf;
-import protocols.storage.messages.RetrieveMessage;
 import pt.unl.fct.di.novasys.babel.generic.ProtoMessage;
 import pt.unl.fct.di.novasys.network.ISerializer;
 import pt.unl.fct.di.novasys.network.data.Host;
 
 import java.io.IOException;
-import java.math.BigInteger;
 import java.util.UUID;
 
-public class FindSuccessorMessage extends ProtoMessage {
 
-    public static final short MSG_ID = 101;
+public class SuccessorFoundMessage extends ProtoMessage{
+
+    public static final short MSG_ID = 102;
 
     private final UUID mid;
-    private final Host sender;
+    private final Host successor;
     private final Host ofNode;
 
     private final short toDeliver;
 
 
-    public FindSuccessorMessage(UUID mid, Host sender,Host ofNode, short toDeliver) {
+    public SuccessorFoundMessage(UUID mid, Host successor,Host ofNode, short toDeliver) {
         super(MSG_ID);
         this.mid = mid;
-        this.sender = sender;
+        this.successor = successor;
         this.ofNode=ofNode;
         this.toDeliver = toDeliver;
     }
@@ -33,8 +32,8 @@ public class FindSuccessorMessage extends ProtoMessage {
         return mid;
     }
 
-    public Host getSender() {
-        return sender;
+    public Host getSuccessor() {
+        return successor;
     }
 
     public short getToDeliver() {
@@ -45,12 +44,12 @@ public class FindSuccessorMessage extends ProtoMessage {
         return ofNode;
     }
 
-    public static ISerializer<FindSuccessorMessage> serializer = new ISerializer<>() {
+    public static ISerializer<SuccessorFoundMessage> serializer = new ISerializer<>() {
         @Override
-        public void serialize(FindSuccessorMessage findSuccessorMessage, ByteBuf out) throws IOException {
+        public void serialize(SuccessorFoundMessage findSuccessorMessage, ByteBuf out) throws IOException {
             out.writeLong(findSuccessorMessage.mid.getMostSignificantBits());
             out.writeLong(findSuccessorMessage.mid.getLeastSignificantBits());
-            Host.serializer.serialize(findSuccessorMessage.sender, out);
+            Host.serializer.serialize(findSuccessorMessage.successor, out);
             out.writeShort(findSuccessorMessage.toDeliver);
             Host.serializer.serialize(findSuccessorMessage.ofNode, out);
 
@@ -63,15 +62,15 @@ public class FindSuccessorMessage extends ProtoMessage {
 
 
         @Override
-        public FindSuccessorMessage deserialize(ByteBuf in) throws IOException {
+        public SuccessorFoundMessage deserialize(ByteBuf in) throws IOException {
             long firstLong = in.readLong();
             long secondLong = in.readLong();
             UUID mid = new UUID(firstLong, secondLong);
-            Host sender = Host.serializer.deserialize(in);
+            Host sucessor = Host.serializer.deserialize(in);
             short toDeliver = in.readShort();
             Host ofNode = Host.serializer.deserialize(in);
 
-            return new FindSuccessorMessage(mid, sender,ofNode, toDeliver);
+            return new SuccessorFoundMessage(mid, sucessor,ofNode, toDeliver);
         }
     };
 }
