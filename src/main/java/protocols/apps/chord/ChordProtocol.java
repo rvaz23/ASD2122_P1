@@ -194,10 +194,19 @@ public class ChordProtocol extends GenericProtocol {
             } else {
                 //Oque fazer??o que pode acontecer??
             }
+        }else{
+            if (from.compareTo(msg.getSuccessor())>0 && msg.getOfNode()>msg.getSuccessor().hashCode()){
+                //Refactor finger table, when completes ring cycle
+                int offset=msg.getOfNode()-from.hashCode();
+                fingerTable.remove(msg.getOfNode());
+                fingerTable.put(offset,null);
+                FindSuccessorMessage findSuccessorMessage = new FindSuccessorMessage(UUID.randomUUID(),self,offset,PROTO_ID);
+                sendMessage(findSuccessorMessage,from);
+            }
+            //adicionar a fingertable devera adicionar a entry(ofNode)
+            int pos = getPreviousOnFingerTable(msg.getSuccessor().hashCode());
+            fingerTable.put(pos, msg.getSuccessor());
         }
-        //adicionar a fingertable
-        int pos = getPreviousOnFingerTable(msg.getSuccessor().hashCode());
-        fingerTable.put(pos, msg.getSuccessor());
     }
 
     private void uponFindSuccessor(FindSuccessorMessage msg, Host from, short sourceProto, int channelId) {
