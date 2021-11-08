@@ -4,9 +4,14 @@ import channel.notifications.ChannelCreated;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import protocols.dht.messages.*;
+import protocols.dht.replies.LookupReply;
+import protocols.dht.requests.LookupRequest;
 import protocols.dht.timers.CheckPredecessorTimer;
 import protocols.dht.timers.FixFingerTimer;
 import protocols.dht.timers.StabilizeTimer;
+import protocols.storage.StorageEntry;
+import protocols.storage.replies.StoreOKReply;
+import protocols.storage.requests.StoreRequest;
 import pt.unl.fct.di.novasys.babel.core.GenericProtocol;
 import pt.unl.fct.di.novasys.babel.exceptions.HandlerRegistrationException;
 import pt.unl.fct.di.novasys.babel.generic.ProtoMessage;
@@ -33,12 +38,14 @@ public class ChordProtocol extends GenericProtocol {
     private BigInteger selfID;
     //private HashMap<Long, ChordProtocol> fingerTable;
     private boolean hasFailed;
-    private long next;
+    private short storageProtoId;
     private Host self;
     private final Set<Host> connectedTo; //Peers I am connected to
     private final Set<Host> connectedFrom; //Peers I am connected to
     private final Set<Host> pending; //Peers I am trying to connect to
     private HashMap<BigInteger, Host> fingerTable; //Peers that i know
+    private HashMap<BigInteger, Host> contentTable;
+
 
     private final int sampleTime; //param: timeout for samples
     private final int subsetSize; //param: maximum size of sample;
@@ -52,9 +59,10 @@ public class ChordProtocol extends GenericProtocol {
 
     private final int channelId; //Id of the created channel
 
-    public ChordProtocol(Properties properties, Host self) throws IOException, HandlerRegistrationException {
+    public ChordProtocol(Properties properties, Host self,short storageProtoId) throws IOException, HandlerRegistrationException {
         super(PROTO_NAME, PROTO_ID);
         this.self = self;
+        this.storageProtoId=storageProtoId;
         this.connectedTo = new HashSet<>();
         this.connectedFrom = new HashSet<>();
         this.pending = new HashSet<>();
@@ -83,12 +91,17 @@ public class ChordProtocol extends GenericProtocol {
         channelProps.setProperty(TCPChannel.CONNECT_TIMEOUT_KEY, "1000"); //TCP connect timeout
         channelId = createChannel(TCPChannel.NAME, channelProps); //Create the channel with the given properties
 
+        /*--------------------- Register Request Handlers ----------------------------- */
+        registerRequestHandler(LookupRequest.REQUEST_ID, this::uponLookUpRequest);
+
         /*---------------------- Register Message Serializers ---------------------- */
         registerMessageSerializer(channelId, FindSuccessorMessage.MSG_ID, FindSuccessorMessage.serializer);
         registerMessageSerializer(channelId, SuccessorFoundMessage.MSG_ID, SuccessorFoundMessage.serializer);
         registerMessageSerializer(channelId, FindPredecessorMessage.MSG_ID, FindPredecessorMessage.serializer);
         registerMessageSerializer(channelId, PredecessorFoundMessage.MSG_ID, PredecessorFoundMessage.serializer);
         registerMessageSerializer(channelId, NotificationMessage.MSG_ID, NotificationMessage.serializer);
+        registerMessageSerializer(channelId, LookUpRequestMessage.MSG_ID, LookUpRequestMessage.serializer);
+        registerMessageSerializer(channelId, LookUpReplyMessage.MSG_ID, LookUpReplyMessage.serializer);
 
         /*---------------------- Register Message Handlers -------------------------- */
         registerMessageHandler(channelId, FindSuccessorMessage.MSG_ID, this::uponFindSuccessor);//, this::uponMsgFail);
@@ -96,6 +109,8 @@ public class ChordProtocol extends GenericProtocol {
         registerMessageHandler(channelId, FindPredecessorMessage.MSG_ID, this::uponFindPredecessor);
         registerMessageHandler(channelId, PredecessorFoundMessage.MSG_ID, this::uponFoundPredecessor);
         registerMessageHandler(channelId, NotificationMessage.MSG_ID, this::uponNotify);
+        registerMessageHandler(channelId, LookUpRequestMessage.MSG_ID, this::uponLookUpRequestMessage);
+        registerMessageHandler(channelId, LookUpReplyMessage.MSG_ID, this::uponLookUpReplyMessage);
 
         /*--------------------- Register Timer Handlers ----------------------------- */
         registerTimerHandler(FixFingerTimer.TIMER_ID, this::uponFixFinger);
@@ -238,6 +253,24 @@ public class ChordProtocol extends GenericProtocol {
     }
 
 
+    private void uponLookUpRequestMessage(LookUpRequestMessage msg, Host from, short sourceProto, int channelId) {
+        Host contentOwner = contentTable.get(msg.getContentHash());
+        //se souber quem tem o ficheiro
+        if(contentOwner != null){
+            //retornar o owner do conteudo
+            LookUpReplyMessage lookUpReplyMessage = new LookUpReplyMessage(UUID.randomUUID(),self,contentOwner,msg.getContentHash(),PROTO_ID);
+            sendMessage(lookUpReplyMessage,msg.getSender());
+        }else{
+            BigInteger key =getPreviousOnFingerTable(msg.getContentHash());
+            sendMessage(msg, fingerTable.get(key));
+        }
+    }
+
+    private void uponLookUpReplyMessage(LookUpReplyMessage msg, Host from, short sourceProto, int channelId) {
+        LookupReply lookupReply = new LookupReply(msg.getContentHash(), msg.getContentOwner(), UUID.randomUUID());
+        sendReply(lookupReply,storageProtoId);
+    }
+
 
     /* --------------------------------- Timer Events ---------------------------- */
 
@@ -336,6 +369,14 @@ public class ChordProtocol extends GenericProtocol {
         Host peer = event.getNode();
         logger.debug("Connection from {} is down cause {}", peer, event.getCause());
         connectedFrom.remove(peer);
+    }
+
+
+    /*--------------------------------- Requests ---------------------------------------- */
+    private void uponLookUpRequest(LookupRequest request, short sourceProto) {
+        LookUpRequestMessage lookUpRequestMessage = new LookUpRequestMessage(UUID.randomUUID(),self,request.getID(),PROTO_ID);
+        Host peer =fingerTable.get(getPreviousOnFingerTable(request.getID()));
+        sendMessage(lookUpRequestMessage,peer);
     }
 
     /* --------------------------------- Aux------------------------------- */
