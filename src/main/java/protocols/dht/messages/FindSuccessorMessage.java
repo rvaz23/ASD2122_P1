@@ -68,8 +68,8 @@ public class FindSuccessorMessage extends ProtoMessage {
             UUID mid = new UUID(firstLong, secondLong);
             Host sender = Host.serializer.deserialize(in);
             short toDeliver = in.readShort();
-            byte[] hashToByteArray = new byte[8];
-            for (int i = 0; i < 8; i++) {
+            byte[] hashToByteArray = new byte[20];
+            for (int i = 0; i < 20; i++) {
                 hashToByteArray[i] = in.readByte();
             }
             BigInteger ofNode = new BigInteger(hashToByteArray);
