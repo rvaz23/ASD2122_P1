@@ -53,11 +53,6 @@ public class SuccessorFoundMessage extends ProtoMessage {
             Host.serializer.serialize(findSuccessorMessage.successor, out);
             out.writeShort(findSuccessorMessage.toDeliver);
             out.writeBytes(findSuccessorMessage.ofNode.toByteArray());
-
-            /*out.writeInt(floodMessage.content.length);
-            if (floodMessage.content.length > 0) {
-                out.writeBytes(floodMessage.content);
-            }*/
         }
 
 

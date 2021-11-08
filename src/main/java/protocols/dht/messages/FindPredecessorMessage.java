@@ -43,12 +43,7 @@ public class FindPredecessorMessage extends ProtoMessage {
             out.writeLong(findPredecessorMessage.mid.getMostSignificantBits());
             out.writeLong(findPredecessorMessage.mid.getLeastSignificantBits());
             Host.serializer.serialize(findPredecessorMessage.sender, out);
-            out.writeShort(findPredecessorMessage.toDeliver);
-
-            /*out.writeInt(floodMessage.content.length);
-            if (floodMessage.content.length > 0) {
-                out.writeBytes(floodMessage.content);
-            }*/
+            out.writeShort(findPredecessorMessage.toDeliver);S
         }
 
 
