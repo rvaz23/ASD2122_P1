@@ -16,16 +16,16 @@ public class FindSuccessorMessage extends ProtoMessage {
 
     private final UUID mid;
     private final Host sender;
-    private final int ofNode;
+    private final BigInteger ofNode;
 
     private final short toDeliver;
 
 
-    public FindSuccessorMessage(UUID mid, Host sender,int ofNode, short toDeliver) {
+    public FindSuccessorMessage(UUID mid, Host sender, BigInteger ofNode, short toDeliver) {
         super(MSG_ID);
         this.mid = mid;
         this.sender = sender;
-        this.ofNode=ofNode;
+        this.ofNode = ofNode;
         this.toDeliver = toDeliver;
     }
 
@@ -41,7 +41,7 @@ public class FindSuccessorMessage extends ProtoMessage {
         return toDeliver;
     }
 
-    public int getOfNode() {
+    public BigInteger getOfNode() {
         return ofNode;
     }
 
@@ -52,8 +52,7 @@ public class FindSuccessorMessage extends ProtoMessage {
             out.writeLong(findSuccessorMessage.mid.getLeastSignificantBits());
             Host.serializer.serialize(findSuccessorMessage.sender, out);
             out.writeShort(findSuccessorMessage.toDeliver);
-            out.writeInt(findSuccessorMessage.ofNode);
-
+            out.writeBytes(findSuccessorMessage.ofNode.toByteArray());
 
             /*out.writeInt(floodMessage.content.length);
             if (floodMessage.content.length > 0) {
@@ -69,9 +68,13 @@ public class FindSuccessorMessage extends ProtoMessage {
             UUID mid = new UUID(firstLong, secondLong);
             Host sender = Host.serializer.deserialize(in);
             short toDeliver = in.readShort();
-            int ofNode = in.readInt();
+            byte[] hashToByteArray = new byte[8];
+            for (int i = 0; i < 8; i++) {
+                hashToByteArray[i] = in.readByte();
+            }
+            BigInteger ofNode = new BigInteger(hashToByteArray);
 
-            return new FindSuccessorMessage(mid, sender,ofNode, toDeliver);
+            return new FindSuccessorMessage(mid, sender, ofNode, toDeliver);
         }
     };
 }

@@ -6,25 +6,26 @@ import pt.unl.fct.di.novasys.network.ISerializer;
 import pt.unl.fct.di.novasys.network.data.Host;
 
 import java.io.IOException;
+import java.math.BigInteger;
 import java.util.UUID;
 
 
-public class SuccessorFoundMessage extends ProtoMessage{
+public class SuccessorFoundMessage extends ProtoMessage {
 
     public static final short MSG_ID = 102;
 
     private final UUID mid;
     private final Host successor;
-    private final int ofNode;
+    private final BigInteger ofNode;
 
     private final short toDeliver;
 
 
-    public SuccessorFoundMessage(UUID mid, Host successor,int ofNode, short toDeliver) {
+    public SuccessorFoundMessage(UUID mid, Host successor, BigInteger ofNode, short toDeliver) {
         super(MSG_ID);
         this.mid = mid;
         this.successor = successor;
-        this.ofNode=ofNode;
+        this.ofNode = ofNode;
         this.toDeliver = toDeliver;
     }
 
@@ -40,7 +41,7 @@ public class SuccessorFoundMessage extends ProtoMessage{
         return toDeliver;
     }
 
-    public int getOfNode() {
+    public BigInteger getOfNode() {
         return ofNode;
     }
 
@@ -51,8 +52,7 @@ public class SuccessorFoundMessage extends ProtoMessage{
             out.writeLong(findSuccessorMessage.mid.getLeastSignificantBits());
             Host.serializer.serialize(findSuccessorMessage.successor, out);
             out.writeShort(findSuccessorMessage.toDeliver);
-            out.writeInt(findSuccessorMessage.ofNode);
-
+            out.writeBytes(findSuccessorMessage.ofNode.toByteArray());
 
             /*out.writeInt(floodMessage.content.length);
             if (floodMessage.content.length > 0) {
@@ -68,9 +68,13 @@ public class SuccessorFoundMessage extends ProtoMessage{
             UUID mid = new UUID(firstLong, secondLong);
             Host sucessor = Host.serializer.deserialize(in);
             short toDeliver = in.readShort();
-            int ofNode = in.readInt();
+            byte[] hashToByteArray = new byte[8];
+            for (int i = 0; i < 8; i++) {
+                hashToByteArray[i] = in.readByte();
+            }
+            BigInteger ofNode = new BigInteger(hashToByteArray);
 
-            return new SuccessorFoundMessage(mid, sucessor,ofNode, toDeliver);
+            return new SuccessorFoundMessage(mid, sucessor, ofNode, toDeliver);
         }
     };
 }
