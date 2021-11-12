@@ -31,7 +31,7 @@ public class ChordProtocol extends GenericProtocol {
 
     public static final String PROTO_NAME = "ChordApplication";
     public static final short PROTO_ID = 301;
-    private static final int SIZE = 5;
+    private static int SIZE = 5;
 
 
     private Host predecessor, successor;
@@ -67,6 +67,7 @@ public class ChordProtocol extends GenericProtocol {
         this.connectedFrom = new HashSet<>();
         this.pending = new HashSet<>();
         this.selfID = HashGenerator.generateHash(self.toString());
+        SIZE=Integer.parseInt(properties.getProperty("finger_size","5"));
         this.fingerTable = new HashMap<BigInteger, Host>();
         for (BigInteger finger : computeFingerNumbers(SIZE)) {
             fingerTable.put(new BigInteger(String.valueOf(finger)), null);
@@ -210,10 +211,11 @@ public class ChordProtocol extends GenericProtocol {
             int cmp = HashGenerator.generateHash(from.toString()).compareTo(HashGenerator.generateHash(msg.getSuccessor().toString()));
             if (cmp > 0 && (msg.getOfNode().compareTo(HashGenerator.generateHash(msg.getSuccessor().toString())) > 0)) {
                 //Refactor finger table, when completes ring cycle
-                BigInteger offset = msg.getOfNode().subtract(HashGenerator.generateHash(from.toString()));
+                BigInteger index = msg.getOfNode().remainder(HashGenerator.generateHash(from.toString()));
+                //BigInteger offset = msg.getOfNode().subtract());
                 fingerTable.remove(msg.getOfNode());
-                fingerTable.put(offset, null);
-                FindSuccessorMessage findSuccessorMessage = new FindSuccessorMessage(UUID.randomUUID(), self, offset, PROTO_ID);
+                fingerTable.put(index, null);
+                FindSuccessorMessage findSuccessorMessage = new FindSuccessorMessage(UUID.randomUUID(), self, index, PROTO_ID);
                 sendMessage(findSuccessorMessage, from);
             } else {
                 //adicionar a fingertable devera adicionar a entry(ofNode)
