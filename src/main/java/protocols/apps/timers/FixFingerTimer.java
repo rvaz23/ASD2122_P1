@@ -2,11 +2,11 @@ package protocols.apps.timers;
 
 import pt.unl.fct.di.novasys.babel.generic.ProtoTimer;
 
-public class SampleTimer extends ProtoTimer {
+public class FixFingerTimer extends ProtoTimer {
 
     public static final short TIMER_ID = 101;
 
-    public SampleTimer() {
+    public FixFingerTimer() {
         super(TIMER_ID);
     }
 

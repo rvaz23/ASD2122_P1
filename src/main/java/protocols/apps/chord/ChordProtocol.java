@@ -4,13 +4,12 @@ import channel.notifications.ChannelCreated;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import protocols.apps.timers.InfoTimer;
-import protocols.apps.timers.SampleTimer;
+import protocols.apps.timers.FixFingerTimer;
 import protocols.dht.FingerEntry;
 import protocols.dht.messages.*;
 import protocols.dht.replies.LookupReply;
 import protocols.dht.requests.LookupRequest;
 import protocols.dht.timers.CheckPredecessorTimer;
-import protocols.dht.timers.FixFingerTimer;
 import protocols.dht.timers.StabilizeTimer;
 import pt.unl.fct.di.novasys.babel.core.GenericProtocol;
 import pt.unl.fct.di.novasys.babel.exceptions.HandlerRegistrationException;
@@ -46,8 +45,10 @@ public class ChordProtocol extends GenericProtocol {
     private HashMap<BigInteger, FingerEntry> fingerTable; //Peers that i know
 
 
-    private final int sampleTime; //param: timeout for samples
-    private final int subsetSize; //param: maximum size of sample;
+    private final int fixTime; //param: timeout for fixFingersUpdate
+    private final int stabTime; //param: timeout for fixFingersUpdate
+    private final int predTime; //param: timeout for fixFingersUpdate
+
 
     //Variables related with measurement
     private long storeRequests = 0;
@@ -76,8 +77,9 @@ public class ChordProtocol extends GenericProtocol {
 
 
         //Get some configurations from the Properties object
-        this.subsetSize = Integer.parseInt(properties.getProperty("sample_size", "6"));
-        this.sampleTime = Integer.parseInt(properties.getProperty("sample_time", "2000")); //2 seconds
+        this.fixTime = Integer.parseInt(properties.getProperty("fixFingers_time", "2000")); //2 seconds
+        this.stabTime = Integer.parseInt(properties.getProperty("stabilize_time", "2000")); //2 seconds
+        this.predTime = Integer.parseInt(properties.getProperty("predecessor_time", "2000")); //2 seconds
 
         String cMetricsInterval = properties.getProperty("channel_metrics_interval", "10000"); //10 seconds
 
@@ -149,7 +151,9 @@ public class ChordProtocol extends GenericProtocol {
         }
 
         //Setup the timer used to send samples (we registered its handler on the constructor)
-        setupPeriodicTimer(new SampleTimer(), this.sampleTime, this.sampleTime);
+        setupPeriodicTimer(new FixFingerTimer(), this.fixTime, this.fixTime);
+        setupPeriodicTimer(new StabilizeTimer(), this.stabTime, this.stabTime);
+        setupPeriodicTimer(new CheckPredecessorTimer(), this.predTime, this.predTime);
 
         //Setup the timer to display protocol information (also registered handler previously)
         int pMetricsInterval = Integer.parseInt(properties.getProperty("protocol_metrics_interval", "10000"));
@@ -217,7 +221,7 @@ public class ChordProtocol extends GenericProtocol {
                 //adicionar a fingertable devera adicionar a entry(ofNode)
                 BigInteger pos = getPreviousOnFingerTable(HashGenerator.generateHash(msg.getSuccessor().toString()));
                 //fingerTable.put(msg.getOfNode(), msg.getSuccessor());
-                FingerEntry fingerEntry = new FingerEntry(System.currentTimeMillis(),msg.getSuccessor());
+                FingerEntry fingerEntry = new FingerEntry(System.currentTimeMillis(), msg.getSuccessor());
                 fingerTable.put(pos, fingerEntry);
                 if (!connectedTo.contains(msg.getSuccessor())) {
                     openConnection(msg.getSuccessor());
@@ -252,18 +256,19 @@ public class ChordProtocol extends GenericProtocol {
     }
 
 
-    //TODO PEDIR AO STORAGE VERIFICAR CONTEUDO
     private void uponLookUpRequestMessage(LookUpRequestMessage msg, Host from, short sourceProto, int channelId) {
-        Host contentOwner = contentTable.get(msg.getContentHash());
-        //se souber quem tem o ficheiro
-        if (contentOwner != null) {
-            //retornar o owner do conteudo
-            LookUpReplyMessage lookUpReplyMessage = new LookUpReplyMessage(UUID.randomUUID(), self, contentOwner, msg.getContentHash(), PROTO_ID);
-            sendMessage(lookUpReplyMessage, msg.getSender());
-        } else {
-            BigInteger key = getPreviousOnFingerTable(msg.getContentHash());
-            sendMessage(msg, fingerTable.get(key).getPeer());
+        if (selfID.compareTo(HashGenerator.generateHash(msg.getContentHash().toString())) < 0) {
+            BigInteger bigSuccessor = HashGenerator.generateHash(successor.toString());
+            int cmp1 = bigSuccessor.compareTo(HashGenerator.generateHash(msg.getContentHash().toString()));
+            int cmp2 = bigSuccessor.compareTo(selfID);
+            if (cmp1 >= 0 || cmp2 < 0) {
+                LookUpReplyMessage lookUpReplyMessage = new LookUpReplyMessage(UUID.randomUUID(), self, self, msg.getContentHash(), PROTO_ID);
+                sendMessage(lookUpReplyMessage, msg.getSender());
+                return;
+            }
         }
+        BigInteger key = getPreviousOnFingerTable(msg.getContentHash());
+        sendMessage(msg, fingerTable.get(key).getPeer());
     }
 
     private void uponLookUpReplyMessage(LookUpReplyMessage msg, Host from, short sourceProto, int channelId) {
@@ -274,7 +279,7 @@ public class ChordProtocol extends GenericProtocol {
 
     /* --------------------------------- Timer Events ---------------------------- */
 
-    private void uponFixFinger(FixFingerTimer timer, long timerId) {
+    private void uponFixFinger(protocols.dht.timers.FixFingerTimer timer, long timerId) {
         BigInteger[] fingers = computeFingerNumbers(SIZE);
         for (BigInteger key : fingers) {
             BigInteger keyBigInteger = new BigInteger(String.valueOf(key));
@@ -289,9 +294,9 @@ public class ChordProtocol extends GenericProtocol {
         }
         //clean old entries on fingertable
         long currentTime = System.currentTimeMillis();
-        for (BigInteger fkey:fingerTable.keySet()){
+        for (BigInteger fkey : fingerTable.keySet()) {
             FingerEntry fingerEntry = fingerTable.get(fkey);
-            if(currentTime-fingerEntry.getLastTimeRead()> 2*fixTime){
+            if (currentTime - fingerEntry.getLastTimeRead() > 2 * fixTime) {
                 closeConnection(fingerEntry.getPeer());
                 fingerTable.remove(fkey);
             }
@@ -380,6 +385,16 @@ public class ChordProtocol extends GenericProtocol {
 
     /*--------------------------------- Requests ---------------------------------------- */
     private void uponLookUpRequest(LookupRequest request, short sourceProto) {
+        if (selfID.compareTo(HashGenerator.generateHash(request.getID().toString())) < 0) {
+            BigInteger bigSuccessor = HashGenerator.generateHash(successor.toString());
+            int cmp1 = bigSuccessor.compareTo(HashGenerator.generateHash(request.getID().toString()));
+            int cmp2 = bigSuccessor.compareTo(selfID);
+            if (cmp1 >= 0 || cmp2 < 0) {
+                LookupReply lookupReply = new LookupReply(request.getID(), self, UUID.randomUUID());
+                sendReply(lookupReply, storageProtoId);
+                return;
+            }
+        }
         LookUpRequestMessage lookUpRequestMessage = new LookUpRequestMessage(UUID.randomUUID(), self, request.getID(), PROTO_ID);
         Host peer = fingerTable.get(getPreviousOnFingerTable(request.getID())).getPeer();
         sendMessage(lookUpRequestMessage, peer);
