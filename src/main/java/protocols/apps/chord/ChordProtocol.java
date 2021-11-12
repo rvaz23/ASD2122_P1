@@ -5,6 +5,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import protocols.apps.timers.InfoTimer;
 import protocols.apps.timers.SampleTimer;
+import protocols.dht.FingerEntry;
 import protocols.dht.messages.*;
 import protocols.dht.replies.LookupReply;
 import protocols.dht.requests.LookupRequest;
@@ -42,8 +43,7 @@ public class ChordProtocol extends GenericProtocol {
     private final Set<Host> connectedTo; //Peers I am connected to
     private final Set<Host> connectedFrom; //Peers I am connected to
     private final Set<Host> pending; //Peers I am trying to connect to
-    private HashMap<BigInteger, Host> fingerTable; //Peers that i know
-    private HashMap<BigInteger, Host> contentTable;
+    private HashMap<BigInteger, FingerEntry> fingerTable; //Peers that i know
 
 
     private final int sampleTime; //param: timeout for samples
@@ -67,7 +67,7 @@ public class ChordProtocol extends GenericProtocol {
         this.pending = new HashSet<>();
         this.selfID = HashGenerator.generateHash(self.toString());
         SIZE = Integer.parseInt(properties.getProperty("finger_size", "5"));
-        this.fingerTable = new HashMap<BigInteger, Host>();
+        this.fingerTable = new HashMap<BigInteger, FingerEntry>();
         for (BigInteger finger : computeFingerNumbers(SIZE)) {
             fingerTable.put(new BigInteger(String.valueOf(finger)), null);
         }
@@ -161,7 +161,7 @@ public class ChordProtocol extends GenericProtocol {
     private void uponFindSuccessor(FindSuccessorMessage msg, Host from, short sourceProto, int channelId) {
         BigInteger key = getPreviousOnFingerTable(msg.getOfNode());
         Host nodeToAsk;
-        nodeToAsk = fingerTable.get(key);
+        nodeToAsk = fingerTable.get(key).getPeer();
 
         if (selfID.compareTo(HashGenerator.generateHash(msg.getOfNode().toString())) < 0) {
             //verifica se sucessor e maior ou igual ao que procuro
@@ -210,14 +210,15 @@ public class ChordProtocol extends GenericProtocol {
                 BigInteger index = msg.getOfNode().remainder(HashGenerator.generateHash(from.toString()));
                 //BigInteger offset = msg.getOfNode().subtract());
                 fingerTable.remove(msg.getOfNode());
-                fingerTable.put(index, null);
+                //fingerTable.put(index, null);
                 FindSuccessorMessage findSuccessorMessage = new FindSuccessorMessage(UUID.randomUUID(), self, index, PROTO_ID);
                 sendMessage(findSuccessorMessage, from);
             } else {
                 //adicionar a fingertable devera adicionar a entry(ofNode)
                 BigInteger pos = getPreviousOnFingerTable(HashGenerator.generateHash(msg.getSuccessor().toString()));
                 //fingerTable.put(msg.getOfNode(), msg.getSuccessor());
-                fingerTable.put(pos, msg.getSuccessor());
+                FingerEntry fingerEntry = new FingerEntry(System.currentTimeMillis(),msg.getSuccessor());
+                fingerTable.put(pos, fingerEntry);
                 if (!connectedTo.contains(msg.getSuccessor())) {
                     openConnection(msg.getSuccessor());
                 }
@@ -251,6 +252,7 @@ public class ChordProtocol extends GenericProtocol {
     }
 
 
+    //TODO PEDIR AO STORAGE VERIFICAR CONTEUDO
     private void uponLookUpRequestMessage(LookUpRequestMessage msg, Host from, short sourceProto, int channelId) {
         Host contentOwner = contentTable.get(msg.getContentHash());
         //se souber quem tem o ficheiro
@@ -260,7 +262,7 @@ public class ChordProtocol extends GenericProtocol {
             sendMessage(lookUpReplyMessage, msg.getSender());
         } else {
             BigInteger key = getPreviousOnFingerTable(msg.getContentHash());
-            sendMessage(msg, fingerTable.get(key));
+            sendMessage(msg, fingerTable.get(key).getPeer());
         }
     }
 
@@ -274,20 +276,26 @@ public class ChordProtocol extends GenericProtocol {
 
     private void uponFixFinger(FixFingerTimer timer, long timerId) {
         BigInteger[] fingers = computeFingerNumbers(SIZE);
-        HashMap<BigInteger, Host> auxFingerTable = new HashMap<BigInteger, Host>();
         for (BigInteger key : fingers) {
             BigInteger keyBigInteger = new BigInteger(String.valueOf(key));
-            auxFingerTable.put(keyBigInteger, null);
             FindSuccessorMessage findSuccessorMessage = new FindSuccessorMessage(UUID.randomUUID(), self, keyBigInteger, PROTO_ID);
             BigInteger val = getPreviousOnFingerTable(key);
-            Host host = fingerTable.get(val);
+            Host host = fingerTable.get(val).getPeer();
             if (host == null) {
                 sendMessage(findSuccessorMessage, successor);
             } else {
                 sendMessage(findSuccessorMessage, host);
             }
         }
-        fingerTable = auxFingerTable;
+        //clean old entries on fingertable
+        long currentTime = System.currentTimeMillis();
+        for (BigInteger fkey:fingerTable.keySet()){
+            FingerEntry fingerEntry = fingerTable.get(fkey);
+            if(currentTime-fingerEntry.getLastTimeRead()> 2*fixTime){
+                closeConnection(fingerEntry.getPeer());
+                fingerTable.remove(fkey);
+            }
+        }
     }
 
     private void uponCheckPredecessor(CheckPredecessorTimer timer, long timerId) {
@@ -329,7 +337,7 @@ public class ChordProtocol extends GenericProtocol {
             if (bigPeer.compareTo(firstFingerKey) == 0)
                 firstFingerKey = (BigInteger) fingerTable.keySet().toArray()[1];
 
-            Host firstFinger = fingerTable.get(firstFingerKey);
+            Host firstFinger = fingerTable.get(firstFingerKey).getPeer();
             FindSuccessorMessage findSuccessorMessage =
                     new FindSuccessorMessage(UUID.randomUUID(), self, firstFingerKey, PROTO_ID);
             sendMessage(findSuccessorMessage, firstFinger);
@@ -373,7 +381,7 @@ public class ChordProtocol extends GenericProtocol {
     /*--------------------------------- Requests ---------------------------------------- */
     private void uponLookUpRequest(LookupRequest request, short sourceProto) {
         LookUpRequestMessage lookUpRequestMessage = new LookUpRequestMessage(UUID.randomUUID(), self, request.getID(), PROTO_ID);
-        Host peer = fingerTable.get(getPreviousOnFingerTable(request.getID()));
+        Host peer = fingerTable.get(getPreviousOnFingerTable(request.getID())).getPeer();
         sendMessage(lookUpRequestMessage, peer);
     }
 
