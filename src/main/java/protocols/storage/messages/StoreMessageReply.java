@@ -9,15 +9,14 @@ import java.io.IOException;
 import java.math.BigInteger;
 import java.util.UUID;
 
-public class RetrieveMessage extends ProtoMessage{
-
+public class StoreMessageReply extends ProtoMessage {
     public static final short MSG_ID = 201;
 
     private final UUID mid;
     private final Host sender;
 
     private final short toDeliver;
-    private final BigInteger cid;
+    private final BigInteger hash;
 
 
 
@@ -29,12 +28,12 @@ public class RetrieveMessage extends ProtoMessage{
                 '}';
     }
 
-    public RetrieveMessage(UUID mid, Host sender, short toDeliver, BigInteger cid) {
+    public StoreMessageReply(UUID mid, Host sender, short toDeliver, BigInteger hash) {
         super(MSG_ID);
         this.mid = mid;
         this.sender = sender;
         this.toDeliver = toDeliver;
-        this.cid = cid;
+        this.hash = hash;
     }
 
     public Host getSender() {
@@ -45,36 +44,37 @@ public class RetrieveMessage extends ProtoMessage{
         return mid;
     }
 
-    public BigInteger getCid() { return cid; }
+    public short getToDeliver() {
+        return toDeliver;
+    }
+
+    public BigInteger getHash() {
+        return hash;
+    }
 
     //ATENTION BIGINT 8 BYTES
-    public static ISerializer<RetrieveMessage> serializer = new ISerializer<>() {
+    public static ISerializer<StoreMessageReply> serializer = new ISerializer<>() {
         @Override
-        public void serialize(RetrieveMessage retrieveMessage, ByteBuf out) throws IOException {
-            out.writeLong(retrieveMessage.mid.getMostSignificantBits());
-            out.writeLong(retrieveMessage.mid.getLeastSignificantBits());
-            Host.serializer.serialize(retrieveMessage.sender, out);
-            out.writeShort(retrieveMessage.toDeliver);
-            out.writeBytes(retrieveMessage.cid.toByteArray());
+        public void serialize(StoreMessageReply storeMessageReply, ByteBuf out) throws IOException {
+            out.writeLong(storeMessageReply.mid.getMostSignificantBits());
+            out.writeLong(storeMessageReply.mid.getLeastSignificantBits());
+            Host.serializer.serialize(storeMessageReply.sender, out);
+            out.writeShort(storeMessageReply.toDeliver);
+            out.writeBytes(storeMessageReply.hash.toByteArray());
 
-
-            /*out.writeInt(floodMessage.content.length);
-            if (floodMessage.content.length > 0) {
-                out.writeBytes(floodMessage.content);
-            }*/
         }
 
 
         @Override
-        public RetrieveMessage deserialize(ByteBuf in) throws IOException {
+        public StoreMessageReply deserialize(ByteBuf in) throws IOException {
             long firstLong = in.readLong();
             long secondLong = in.readLong();
             UUID mid = new UUID(firstLong, secondLong);
             Host sender = Host.serializer.deserialize(in);
             short toDeliver = in.readShort();
             byte[] big = in.readBytes(20).array();
-            BigInteger cid = new BigInteger(big);
-            return new RetrieveMessage(mid, sender,toDeliver, cid);
+            BigInteger hash = new BigInteger(big);
+            return new StoreMessageReply(mid, sender,toDeliver, hash);
         }
     };
 }
