@@ -153,19 +153,19 @@ public class StorageProtocol extends GenericProtocol {
 
     private void uponStoreMessage(StoreMessage msg, Host from, short sourceProto, int channelId) {
         StorageEntry storageEntry = new StorageEntry(msg.getContentName(), msg.getContent());
-        storage.put(msg.getHash(),storageEntry);
+        storage.put(msg.getHash(), storageEntry);
         openConnection(msg.getSender());
-        StoreMessageReply storeMessageReply = new StoreMessageReply(UUID.randomUUID(),self,sourceProto,msg.getHash());
-        sendMessage(storeMessageReply,msg.getSender());
+        StoreMessageReply storeMessageReply = new StoreMessageReply(UUID.randomUUID(), self, sourceProto, msg.getHash());
+        sendMessage(storeMessageReply, msg.getSender());
         closeConnection(msg.getSender());
     }
 
     private void uponStoreMessageReply(StoreMessageReply reply, Host from, short sourceProto, int channelId) {
         //Wait for storeOKMessage response
         StorageEntry entry = pendingToStore.get(reply.getHash());
-        if(entry != null){
+        if (entry != null) {
             logger.info("{}: Store completed: {} ", self, entry.getName());
-            StoreOKReply storeOKReply = new StoreOKReply(entry.getName(),UUID.randomUUID());
+            StoreOKReply storeOKReply = new StoreOKReply(entry.getName(), UUID.randomUUID());
             sendReply(storeOKReply, sourceProto);
             pendingToStore.remove(entry);
         }
@@ -173,20 +173,20 @@ public class StorageProtocol extends GenericProtocol {
 
     private void uponRetrieveMessage(RetrieveMessage msg, Host from, short sourceProto, int channelId) {
         //Wait for storeOKMessage response
-       StorageEntry storageEntry =storage.get(msg.getCid());
-       if(storageEntry != null){
-           RetrieveResponseMessage retrieveResponseMessage = new RetrieveResponseMessage(UUID.randomUUID(),self,sourceProto,msg.getCid(),storageEntry.getName(),storageEntry.getContent());
-           openConnection(msg.getSender());
-           sendMessage(retrieveResponseMessage,msg.getSender());
-           closeConnection(msg.getSender());
-       }else{
-           //TODO retornar msg conteudo vazio???
-       }
+        StorageEntry storageEntry = storage.get(msg.getCid());
+        if (storageEntry != null) {
+            RetrieveResponseMessage retrieveResponseMessage = new RetrieveResponseMessage(UUID.randomUUID(), self, sourceProto, msg.getCid(), storageEntry.getName(), storageEntry.getContent());
+            openConnection(msg.getSender());
+            sendMessage(retrieveResponseMessage, msg.getSender());
+            closeConnection(msg.getSender());
+        } else {
+            //TODO retornar msg conteudo vazio???
+        }
     }
 
     private void uponRetrieveResponseMessage(RetrieveResponseMessage reply, Host from, short sourceProto, int channelId) {
         //Wait for storeOKMessage response
-        RetrieveOKReply retrieveOk = new RetrieveOKReply(reply.getName(),UUID.randomUUID(), reply.getContent() );
+        RetrieveOKReply retrieveOk = new RetrieveOKReply(reply.getName(), UUID.randomUUID(), reply.getContent());
         sendReply(retrieveOk, sourceProto);
     }
 

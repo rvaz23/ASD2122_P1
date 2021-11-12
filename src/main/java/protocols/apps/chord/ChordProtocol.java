@@ -35,17 +35,16 @@ public class ChordProtocol extends GenericProtocol {
 
     private Host predecessor, successor;
     private BigInteger selfID;
-    //private HashMap<Long, ChordProtocol> fingerTable;
     private boolean hasFailed;
     private short storageProtoId;
     private Host self;
-    private final Set<Host> connectedTo; //Peers I am connected to
-    private final Set<Host> connectedFrom; //Peers I am connected to
-    private final Set<Host> pending; //Peers I am trying to connect to
-    private HashMap<BigInteger, FingerEntry> fingerTable; //Peers that i know
+    private final Set<Host> connectedTo;                    //Peers I am connected to
+    private final Set<Host> connectedFrom;                  //Peers connected to me
+    private final HashMap<Host, Set<ProtoMessage>> pending; //Peers and respective pending messages to send
+    private HashMap<BigInteger, FingerEntry> fingerTable;   //Peers that I know from finger table
 
 
-    private final int fixTime; //param: timeout for fixFingersUpdate
+    private final int fixTime;  //param: timeout for fixFingersUpdate
     private final int stabTime; //param: timeout for fixFingersUpdate
     private final int predTime; //param: timeout for fixFingersUpdate
 
@@ -57,7 +56,7 @@ public class ChordProtocol extends GenericProtocol {
     private long retrieveRequestsSuccessful = 0;
     private long retrieveRequestsFailed = 0;
 
-    private final int channelId; //Id of the created channel
+    private final int channelId; //ID of the created channel
 
     public ChordProtocol(Properties properties, Host self, short storageProtoId) throws IOException, HandlerRegistrationException {
         super(PROTO_NAME, PROTO_ID);
@@ -65,10 +64,10 @@ public class ChordProtocol extends GenericProtocol {
         this.storageProtoId = storageProtoId;
         this.connectedTo = new HashSet<>();
         this.connectedFrom = new HashSet<>();
-        this.pending = new HashSet<>();
+        this.pending = new HashMap<Host, Set<ProtoMessage>>();
         this.selfID = HashGenerator.generateHash(self.toString());
-        SIZE = Integer.parseInt(properties.getProperty("finger_size", "5"));
         this.fingerTable = new HashMap<BigInteger, FingerEntry>();
+        SIZE = Integer.parseInt(properties.getProperty("finger_size", "5"));
         /*for (BigInteger finger : computeFingerNumbers(SIZE)) {
             fingerTable.put(new BigInteger(String.valueOf(finger)), null);
         }*/
@@ -77,21 +76,21 @@ public class ChordProtocol extends GenericProtocol {
 
 
         //Get some configurations from the Properties object
-        this.fixTime = Integer.parseInt(properties.getProperty("fixFingers_time", "2000")); //2 seconds
-        this.stabTime = Integer.parseInt(properties.getProperty("stabilize_time", "2000")); //2 seconds
-        this.predTime = Integer.parseInt(properties.getProperty("predecessor_time", "2000")); //2 seconds
+        this.fixTime = Integer.parseInt(properties.getProperty("fixFingers_time", "2000"));     //2 seconds
+        this.stabTime = Integer.parseInt(properties.getProperty("stabilize_time", "2000"));     //2 seconds
+        this.predTime = Integer.parseInt(properties.getProperty("predecessor_time", "2000"));   //2 seconds
 
-        String cMetricsInterval = properties.getProperty("channel_metrics_interval", "10000"); //10 seconds
+        String cMetricsInterval = properties.getProperty("channel_metrics_interval", "10000");  //10 seconds
 
         //Create a properties object to setup channel-specific properties. See the channel description for more details.
         Properties channelProps = new Properties();
-        channelProps.setProperty(TCPChannel.ADDRESS_KEY, properties.getProperty("address")); //The address to bind to
-        channelProps.setProperty(TCPChannel.PORT_KEY, properties.getProperty("port")); //The port to bind to
-        channelProps.setProperty(TCPChannel.METRICS_INTERVAL_KEY, cMetricsInterval); //The interval to receive channel metrics
-        channelProps.setProperty(TCPChannel.HEARTBEAT_INTERVAL_KEY, "1000"); //Heartbeats interval for established connections
-        channelProps.setProperty(TCPChannel.HEARTBEAT_TOLERANCE_KEY, "3000"); //Time passed without heartbeats until closing a connection
-        channelProps.setProperty(TCPChannel.CONNECT_TIMEOUT_KEY, "1000"); //TCP connect timeout
-        channelId = createChannel(TCPChannel.NAME, channelProps); //Create the channel with the given properties
+        channelProps.setProperty(TCPChannel.ADDRESS_KEY, properties.getProperty("address"));//The address to bind to
+        channelProps.setProperty(TCPChannel.PORT_KEY, properties.getProperty("port"));      //The port to bind to
+        channelProps.setProperty(TCPChannel.METRICS_INTERVAL_KEY, cMetricsInterval);        //The interval to receive channel metrics
+        channelProps.setProperty(TCPChannel.HEARTBEAT_INTERVAL_KEY, "1000");                //Heartbeats interval for established connections
+        channelProps.setProperty(TCPChannel.HEARTBEAT_TOLERANCE_KEY, "3000");               //Time passed without heartbeats until closing a connection
+        channelProps.setProperty(TCPChannel.CONNECT_TIMEOUT_KEY, "1000");                   //TCP connect timeout
+        channelId = createChannel(TCPChannel.NAME, channelProps);                           //Create the channel with the given properties
 
         /*--------------------- Register Request Handlers ----------------------------- */
         registerRequestHandler(LookupRequest.REQUEST_ID, this::uponLookUpRequest);
@@ -121,9 +120,9 @@ public class ChordProtocol extends GenericProtocol {
         //registerTimerHandler(InfoTimer.TIMER_ID, this::uponInfoTime);
 
         /*-------------------- Register Channel Events ------------------------------- */
-        registerChannelEventHandler(channelId, OutConnectionDown.EVENT_ID, this::uponOutConnectionDown);//avisar o sucessor do sucessor que falhou
+        registerChannelEventHandler(channelId, OutConnectionDown.EVENT_ID, this::uponOutConnectionDown);
         registerChannelEventHandler(channelId, OutConnectionFailed.EVENT_ID, this::uponOutConnectionFailed);
-        registerChannelEventHandler(channelId, OutConnectionUp.EVENT_ID, this::uponOutConnectionUp);//Fazer join ou notify?
+        registerChannelEventHandler(channelId, OutConnectionUp.EVENT_ID, this::uponOutConnectionUp);
         registerChannelEventHandler(channelId, InConnectionUp.EVENT_ID, this::uponInConnectionUp);
         registerChannelEventHandler(channelId, InConnectionDown.EVENT_ID, this::uponInConnectionDown);
         registerChannelEventHandler(channelId, ChannelMetrics.EVENT_ID, this::uponChannelMetrics);
@@ -141,7 +140,6 @@ public class ChordProtocol extends GenericProtocol {
                 String[] hostElems = contact.split(":");
                 Host contactHost = new Host(InetAddress.getByName(hostElems[0]), Short.parseShort(hostElems[1]));
                 //We add to the pending set until the connection is successful
-                //pending.add(contactHost);
                 openConnection(contactHost);
             } catch (Exception e) {
                 logger.error("Invalid contact on configuration: '" + properties.getProperty("contacts"));
@@ -150,12 +148,12 @@ public class ChordProtocol extends GenericProtocol {
             }
         }
 
-        //Setup the timer used to send samples (we registered its handler on the constructor)
+        //Set up the timer used to send samples (we registered its handler on the constructor)
         setupPeriodicTimer(new FixFingerTimer(), this.fixTime, this.fixTime);
         setupPeriodicTimer(new StabilizeTimer(), this.stabTime, this.stabTime);
         setupPeriodicTimer(new CheckPredecessorTimer(), this.predTime, this.predTime);
 
-        //Setup the timer to display protocol information (also registered handler previously)
+        //Set up the timer to display protocol information (also registered handler previously)
         int pMetricsInterval = Integer.parseInt(properties.getProperty("protocol_metrics_interval", "10000"));
         if (pMetricsInterval > 0)
             setupPeriodicTimer(new InfoTimer(), pMetricsInterval, pMetricsInterval);
@@ -168,35 +166,34 @@ public class ChordProtocol extends GenericProtocol {
         nodeToAsk = fingerTable.get(key).getPeer();
 
         if (selfID.compareTo(HashGenerator.generateHash(msg.getOfNode().toString())) < 0) {
-            //verifica se sucessor e maior ou igual ao que procuro
+            //checks if my successor >= msg.getOfNode
             BigInteger bigSuccessor = HashGenerator.generateHash(successor.toString());
             int cmp1 = bigSuccessor.compareTo(HashGenerator.generateHash(msg.getOfNode().toString()));
-            //Verifica se o meu sucessor é menor que eu (caso de dar a volta ao anel)
+            //checks if my successor >= myself
             int cmp2 = bigSuccessor.compareTo(selfID);
             if (cmp1 >= 0 || cmp2 < 0) {
                 //Trigger response
                 //TODO RETURN successor
                 //necessario abrir conexão
                 SuccessorFoundMessage successorFoundMessage = new SuccessorFoundMessage(msg.getMid(), successor, msg.getOfNode(), msg.getToDeliver());
-                sendMessage(successorFoundMessage, msg.getSender());
+                trySendMessage(successorFoundMessage, msg.getSender());
                 //se nao pertencer a finger table fechar conexão
             } else {
                 //TODO PEDIR AO FINGERtable ANTERIOR AO node findSuccessor
                 if (nodeToAsk != null) {
-                    sendMessage(msg, nodeToAsk);
+                    trySendMessage(msg, nodeToAsk);
                 } else {
-                    sendMessage(msg, successor);
+                    trySendMessage(msg, successor);
                 }
             }
         } else {
             //TODO PEDIR AO FINGERtable ANTERIOR AO node findSuccessor
             if (nodeToAsk != null) {
-                sendMessage(msg, nodeToAsk);
+                trySendMessage(msg, nodeToAsk);
             } else {
-                sendMessage(msg, successor);
+                trySendMessage(msg, successor);
             }
         }
-
     }
 
     private void uponFoundSuccessor(SuccessorFoundMessage msg, Host from, short sourceProto, int channelId) {
@@ -206,7 +203,7 @@ public class ChordProtocol extends GenericProtocol {
             //TODO avisar sucessor que eu sou o predecessor,Notify
             //predecessor=from;
             NotificationMessage notify = new NotificationMessage(UUID.randomUUID(), self, PROTO_ID);
-            sendMessage(notify, successor);
+            trySendMessage(notify, successor);
         } else {
             int cmp = HashGenerator.generateHash(from.toString()).compareTo(HashGenerator.generateHash(msg.getSuccessor().toString()));
             if (cmp > 0 && (msg.getOfNode().compareTo(HashGenerator.generateHash(msg.getSuccessor().toString())) > 0)) {
@@ -216,7 +213,7 @@ public class ChordProtocol extends GenericProtocol {
                 fingerTable.remove(msg.getOfNode());
                 //fingerTable.put(index, null);
                 FindSuccessorMessage findSuccessorMessage = new FindSuccessorMessage(UUID.randomUUID(), self, index, PROTO_ID);
-                sendMessage(findSuccessorMessage, from);
+                trySendMessage(findSuccessorMessage, from);
             } else {
                 //adicionar a fingertable devera adicionar a entry(ofNode)
                 BigInteger pos = getPreviousOnFingerTable(HashGenerator.generateHash(msg.getSuccessor().toString()));
@@ -232,14 +229,14 @@ public class ChordProtocol extends GenericProtocol {
 
     private void uponFindPredecessor(FindPredecessorMessage msg, Host from, short sourceProto, int channelId) {
         PredecessorFoundMessage predecessorFoundMessage = new PredecessorFoundMessage(msg.getMid(), predecessor, msg.getToDeliver());
-        sendMessage(predecessorFoundMessage, msg.getSender());
+        trySendMessage(predecessorFoundMessage, msg.getSender());
     }
 
     private void uponFoundPredecessor(PredecessorFoundMessage msg, Host from, short sourceProto, int channelId) {
         //pode nao ser necessario, alternativa no caso de successor ser negativo, perguntar a rede pelo meu sucesor
         if (successor == null) {
             FindSuccessorMessage findSuccessorMessage = new FindSuccessorMessage(UUID.randomUUID(), self, selfID, PROTO_ID);
-            sendMessage(findSuccessorMessage, from);
+            trySendMessage(findSuccessorMessage, from);
         } else {
             Host peer = msg.getPredecessor();
             BigInteger bigPredecessor = HashGenerator.generateHash(peer.toString());
@@ -251,10 +248,8 @@ public class ChordProtocol extends GenericProtocol {
         }
         //notify my successor
         NotificationMessage notify = new NotificationMessage(UUID.randomUUID(), self, PROTO_ID);
-        sendMessage(notify, successor);
-
+        trySendMessage(notify, successor);
     }
-
 
     private void uponLookUpRequestMessage(LookUpRequestMessage msg, Host from, short sourceProto, int channelId) {
         if (selfID.compareTo(HashGenerator.generateHash(msg.getContentHash().toString())) < 0) {
@@ -263,19 +258,18 @@ public class ChordProtocol extends GenericProtocol {
             int cmp2 = bigSuccessor.compareTo(selfID);
             if (cmp1 >= 0 || cmp2 < 0) {
                 LookUpReplyMessage lookUpReplyMessage = new LookUpReplyMessage(UUID.randomUUID(), self, self, msg.getContentHash(), PROTO_ID);
-                sendMessage(lookUpReplyMessage, msg.getSender());
+                trySendMessage(lookUpReplyMessage, msg.getSender());
                 return;
             }
         }
         BigInteger key = getPreviousOnFingerTable(msg.getContentHash());
-        sendMessage(msg, fingerTable.get(key).getPeer());
+        trySendMessage(msg, fingerTable.get(key).getPeer());
     }
 
     private void uponLookUpReplyMessage(LookUpReplyMessage msg, Host from, short sourceProto, int channelId) {
         LookupReply lookupReply = new LookupReply(msg.getContentHash(), msg.getContentOwner(), UUID.randomUUID());
         sendReply(lookupReply, storageProtoId);
     }
-
 
     /* --------------------------------- Timer Events ---------------------------- */
 
@@ -286,11 +280,11 @@ public class ChordProtocol extends GenericProtocol {
             FindSuccessorMessage findSuccessorMessage = new FindSuccessorMessage(UUID.randomUUID(), self, keyBigInteger, PROTO_ID);
             BigInteger val = getPreviousOnFingerTable(key);
             Host host = fingerTable.get(val).getPeer();
-            if (host == null) {
-                sendMessage(findSuccessorMessage, successor);
-            } else {
-                sendMessage(findSuccessorMessage, host);
-            }
+            if (host == null)
+                trySendMessage(findSuccessorMessage, successor);
+            else
+                trySendMessage(findSuccessorMessage, host);
+
         }
         //clean old entries on fingertable
         long currentTime = System.currentTimeMillis();
@@ -313,7 +307,7 @@ public class ChordProtocol extends GenericProtocol {
     private void uponStabilize(StabilizeTimer timer, long timerId) {
         //create message to successor asking for it's predecessor
         FindPredecessorMessage findPredecessorMessage = new FindPredecessorMessage(UUID.randomUUID(), self, PROTO_ID);
-        sendMessage(findPredecessorMessage, successor);
+        trySendMessage(findPredecessorMessage, successor);
     }
 
     private void uponNotify(NotificationMessage msg, Host from, short sourceProto, int channelId) {
@@ -345,28 +339,48 @@ public class ChordProtocol extends GenericProtocol {
             Host firstFinger = fingerTable.get(firstFingerKey).getPeer();
             FindSuccessorMessage findSuccessorMessage =
                     new FindSuccessorMessage(UUID.randomUUID(), self, firstFingerKey, PROTO_ID);
-            sendMessage(findSuccessorMessage, firstFinger);
+            trySendMessage(findSuccessorMessage, firstFinger);
         }
     }
 
     private void uponOutConnectionFailed(OutConnectionFailed<ProtoMessage> event, int channelId) {
         Host peer = event.getNode();
-        logger.debug("Connection to {} failed cause: {}", event.getNode(), event.getCause());
+        logger.debug("Connection to {} failed cause: {}", peer, event.getCause());
     }
 
     private void uponOutConnectionUp(OutConnectionUp event, int channelId) {
         Host peer = event.getNode();
         logger.debug("Connection to {} is up", peer);
         connectedTo.add(peer);
+
+        //checks if there's pending messages to this new peer
+        Set<ProtoMessage> pendingMessages = pending.get(peer);
+        if (pendingMessages != null && !pendingMessages.isEmpty()) {
+            for (ProtoMessage protoMessage : pendingMessages)
+                trySendMessage(protoMessage, peer);
+            pendingMessages.remove(peer);
+        }
+
         //Verificar se ID nao é conhecido peer!=fingertable
         if (successor == null) {
             UUID uuid = UUID.randomUUID();
             FindSuccessorMessage findSuccessorMessage = new FindSuccessorMessage(uuid, self, selfID, PROTO_ID);
-            sendMessage(findSuccessorMessage, peer);
-            FingerEntry fingerEntry = new FingerEntry(System.currentTimeMillis(),peer);
-            fingerTable.put(selfID.add(new BigInteger("1")),fingerEntry);
-            successor=peer;s
+            trySendMessage(findSuccessorMessage, peer);
+            FingerEntry fingerEntry = new FingerEntry(System.currentTimeMillis(), peer);
+            fingerTable.put(selfID.add(new BigInteger("1")), fingerEntry);
+            successor = peer;
         }
+
+        //if new peer not in finger, close connection
+        boolean fingerTableContainsPeer = false;
+        for (FingerEntry fingerEntry : fingerTable.values()) {
+            if (fingerEntry.peer.equals(peer)) {
+                fingerTableContainsPeer = true;
+                break;
+            }
+        }
+        if (!fingerTableContainsPeer)
+            closeConnection(peer);
     }
 
     /* --------------------------------- TCPChannel IN Events ---------------------------- */
@@ -383,7 +397,6 @@ public class ChordProtocol extends GenericProtocol {
         connectedFrom.remove(peer);
     }
 
-
     /*--------------------------------- Requests ---------------------------------------- */
     private void uponLookUpRequest(LookupRequest request, short sourceProto) {
         if (selfID.compareTo(HashGenerator.generateHash(request.getID().toString())) < 0) {
@@ -398,7 +411,7 @@ public class ChordProtocol extends GenericProtocol {
         }
         LookUpRequestMessage lookUpRequestMessage = new LookUpRequestMessage(UUID.randomUUID(), self, request.getID(), PROTO_ID);
         Host peer = fingerTable.get(getPreviousOnFingerTable(request.getID())).getPeer();
-        sendMessage(lookUpRequestMessage, peer);
+        trySendMessage(lookUpRequestMessage, peer);
     }
 
     /* --------------------------------- Aux------------------------------- */
@@ -415,6 +428,21 @@ public class ChordProtocol extends GenericProtocol {
             return max;
         } else {
             return current;
+        }
+    }
+
+    private void trySendMessage(ProtoMessage message, Host destination) {
+        if (connectedTo.contains(destination))
+            //there's an open connection to the destination
+            sendMessage(message, destination);
+        else {
+            //there's no open connection to the destination. need to open one
+            Set<ProtoMessage> pendingMessages = pending.get(destination);
+            if (pendingMessages == null)
+                pendingMessages = new HashSet<>();
+            pendingMessages.add(message);
+            pending.put(destination, pendingMessages);
+            openConnection(destination);
         }
     }
 
