@@ -3,15 +3,14 @@ package protocols.apps.chord;
 import channel.notifications.ChannelCreated;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import protocols.apps.timers.InfoTimer;
+import protocols.apps.timers.SampleTimer;
 import protocols.dht.messages.*;
 import protocols.dht.replies.LookupReply;
 import protocols.dht.requests.LookupRequest;
 import protocols.dht.timers.CheckPredecessorTimer;
 import protocols.dht.timers.FixFingerTimer;
 import protocols.dht.timers.StabilizeTimer;
-import protocols.storage.StorageEntry;
-import protocols.storage.replies.StoreOKReply;
-import protocols.storage.requests.StoreRequest;
 import pt.unl.fct.di.novasys.babel.core.GenericProtocol;
 import pt.unl.fct.di.novasys.babel.exceptions.HandlerRegistrationException;
 import pt.unl.fct.di.novasys.babel.generic.ProtoMessage;
@@ -59,15 +58,15 @@ public class ChordProtocol extends GenericProtocol {
 
     private final int channelId; //Id of the created channel
 
-    public ChordProtocol(Properties properties, Host self,short storageProtoId) throws IOException, HandlerRegistrationException {
+    public ChordProtocol(Properties properties, Host self, short storageProtoId) throws IOException, HandlerRegistrationException {
         super(PROTO_NAME, PROTO_ID);
         this.self = self;
-        this.storageProtoId=storageProtoId;
+        this.storageProtoId = storageProtoId;
         this.connectedTo = new HashSet<>();
         this.connectedFrom = new HashSet<>();
         this.pending = new HashSet<>();
         this.selfID = HashGenerator.generateHash(self.toString());
-        SIZE=Integer.parseInt(properties.getProperty("finger_size","5"));
+        SIZE = Integer.parseInt(properties.getProperty("finger_size", "5"));
         this.fingerTable = new HashMap<BigInteger, Host>();
         for (BigInteger finger : computeFingerNumbers(SIZE)) {
             fingerTable.put(new BigInteger(String.valueOf(finger)), null);
@@ -125,7 +124,7 @@ public class ChordProtocol extends GenericProtocol {
         registerChannelEventHandler(channelId, OutConnectionUp.EVENT_ID, this::uponOutConnectionUp);//Fazer join ou notify?
         registerChannelEventHandler(channelId, InConnectionUp.EVENT_ID, this::uponInConnectionUp);
         registerChannelEventHandler(channelId, InConnectionDown.EVENT_ID, this::uponInConnectionDown);
-        //registerChannelEventHandler(channelId, ChannelMetrics.EVENT_ID, this::uponChannelMetrics);
+        registerChannelEventHandler(channelId, ChannelMetrics.EVENT_ID, this::uponChannelMetrics);
     }
 
     @Override
@@ -157,9 +156,6 @@ public class ChordProtocol extends GenericProtocol {
         if (pMetricsInterval > 0)
             setupPeriodicTimer(new InfoTimer(), pMetricsInterval, pMetricsInterval);
     }
-
-
-
 
 
     private void uponFindSuccessor(FindSuccessorMessage msg, Host from, short sourceProto, int channelId) {
@@ -248,9 +244,9 @@ public class ChordProtocol extends GenericProtocol {
             if (bigPredecessor.compareTo(selfID) > 0 && bigPredecessor.compareTo(bigSuccessor) < 0)
                 successor = peer;
         }
-            //notify my successor
-            NotificationMessage notify = new NotificationMessage(UUID.randomUUID(), self, PROTO_ID);
-            sendMessage(notify, successor);
+        //notify my successor
+        NotificationMessage notify = new NotificationMessage(UUID.randomUUID(), self, PROTO_ID);
+        sendMessage(notify, successor);
 
     }
 
@@ -258,19 +254,19 @@ public class ChordProtocol extends GenericProtocol {
     private void uponLookUpRequestMessage(LookUpRequestMessage msg, Host from, short sourceProto, int channelId) {
         Host contentOwner = contentTable.get(msg.getContentHash());
         //se souber quem tem o ficheiro
-        if(contentOwner != null){
+        if (contentOwner != null) {
             //retornar o owner do conteudo
-            LookUpReplyMessage lookUpReplyMessage = new LookUpReplyMessage(UUID.randomUUID(),self,contentOwner,msg.getContentHash(),PROTO_ID);
-            sendMessage(lookUpReplyMessage,msg.getSender());
-        }else{
-            BigInteger key =getPreviousOnFingerTable(msg.getContentHash());
+            LookUpReplyMessage lookUpReplyMessage = new LookUpReplyMessage(UUID.randomUUID(), self, contentOwner, msg.getContentHash(), PROTO_ID);
+            sendMessage(lookUpReplyMessage, msg.getSender());
+        } else {
+            BigInteger key = getPreviousOnFingerTable(msg.getContentHash());
             sendMessage(msg, fingerTable.get(key));
         }
     }
 
     private void uponLookUpReplyMessage(LookUpReplyMessage msg, Host from, short sourceProto, int channelId) {
         LookupReply lookupReply = new LookupReply(msg.getContentHash(), msg.getContentOwner(), UUID.randomUUID());
-        sendReply(lookupReply,storageProtoId);
+        sendReply(lookupReply, storageProtoId);
     }
 
 
@@ -376,9 +372,9 @@ public class ChordProtocol extends GenericProtocol {
 
     /*--------------------------------- Requests ---------------------------------------- */
     private void uponLookUpRequest(LookupRequest request, short sourceProto) {
-        LookUpRequestMessage lookUpRequestMessage = new LookUpRequestMessage(UUID.randomUUID(),self,request.getID(),PROTO_ID);
-        Host peer =fingerTable.get(getPreviousOnFingerTable(request.getID()));
-        sendMessage(lookUpRequestMessage,peer);
+        LookUpRequestMessage lookUpRequestMessage = new LookUpRequestMessage(UUID.randomUUID(), self, request.getID(), PROTO_ID);
+        Host peer = fingerTable.get(getPreviousOnFingerTable(request.getID()));
+        sendMessage(lookUpRequestMessage, peer);
     }
 
     /* --------------------------------- Aux------------------------------- */
@@ -405,5 +401,25 @@ public class ChordProtocol extends GenericProtocol {
             numbers[i] = selfID.add(new BigInteger(String.valueOf(pow)));
         }
         return numbers;
+    }
+
+    private void uponChannelMetrics(ChannelMetrics event, int channelId) {
+        StringBuilder sb = new StringBuilder("Channel Metrics:\n");
+        sb.append("In channels:\n");
+        event.getInConnections().forEach(c -> sb.append(String.format("\t%s: msgOut=%s (%s) msgIn=%s (%s)\n",
+                c.getPeer(), c.getSentAppMessages(), c.getSentAppBytes(), c.getReceivedAppMessages(),
+                c.getReceivedAppBytes())));
+        event.getOldInConnections().forEach(c -> sb.append(String.format("\t%s: msgOut=%s (%s) msgIn=%s (%s) (old)\n",
+                c.getPeer(), c.getSentAppMessages(), c.getSentAppBytes(), c.getReceivedAppMessages(),
+                c.getReceivedAppBytes())));
+        sb.append("Out channels:\n");
+        event.getOutConnections().forEach(c -> sb.append(String.format("\t%s: msgOut=%s (%s) msgIn=%s (%s)\n",
+                c.getPeer(), c.getSentAppMessages(), c.getSentAppBytes(), c.getReceivedAppMessages(),
+                c.getReceivedAppBytes())));
+        event.getOldOutConnections().forEach(c -> sb.append(String.format("\t%s: msgOut=%s (%s) msgIn=%s (%s) (old)\n",
+                c.getPeer(), c.getSentAppMessages(), c.getSentAppBytes(), c.getReceivedAppMessages(),
+                c.getReceivedAppBytes())));
+        sb.setLength(sb.length() - 1);
+        logger.info(sb);
     }
 }
