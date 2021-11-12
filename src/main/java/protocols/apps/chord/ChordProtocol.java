@@ -69,9 +69,9 @@ public class ChordProtocol extends GenericProtocol {
         this.selfID = HashGenerator.generateHash(self.toString());
         SIZE = Integer.parseInt(properties.getProperty("finger_size", "5"));
         this.fingerTable = new HashMap<BigInteger, FingerEntry>();
-        for (BigInteger finger : computeFingerNumbers(SIZE)) {
+        /*for (BigInteger finger : computeFingerNumbers(SIZE)) {
             fingerTable.put(new BigInteger(String.valueOf(finger)), null);
-        }
+        }*/
         predecessor = null;
         successor = null;
 
@@ -363,8 +363,9 @@ public class ChordProtocol extends GenericProtocol {
             UUID uuid = UUID.randomUUID();
             FindSuccessorMessage findSuccessorMessage = new FindSuccessorMessage(uuid, self, selfID, PROTO_ID);
             sendMessage(findSuccessorMessage, peer);
-            closeConnection(peer);
-            connectedTo.remove(peer);
+            FingerEntry fingerEntry = new FingerEntry(System.currentTimeMillis(),peer);
+            fingerTable.put(selfID.add(new BigInteger("1")),fingerEntry);
+            successor=peer;s
         }
     }
 
