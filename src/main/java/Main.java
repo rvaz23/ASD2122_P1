@@ -49,19 +49,20 @@ public class Main {
         // Storage Protocol
         StorageProtocol storage = new StorageProtocol(myself,props,AutomatedApplication.PROTO_ID, ChordProtocol.PROTO_ID); /**You need to uncomment this line and define the protocol**/
         // DHT Protocol
+        ChordProtocol dht = new ChordProtocol(props,myself,StorageProtocol.PROTO_ID);
         //DHTProtocol dht = new ...; /**You need to uncomment this line and define the protocol**/
         //Register applications in babel
         babel.registerProtocol(app);
         /** You need to uncomment the next two lines when you have protocols to fill those gaps **/
         babel.registerProtocol(storage);
-        //babel.registerProtocol(dht);
+        babel.registerProtocol(dht);
 
         //Init the protocols. This should be done after creating all protocols, since there can be inter-protocol
         //communications in this step.
         app.init(props);
         /** You need to uncomment the next two lines when you have protocols to fill those gaps **/
         storage.init(props);
-        //dht.init(props);
+        dht.init(props);
 
         //Start babel and protocol threads
         babel.start();
