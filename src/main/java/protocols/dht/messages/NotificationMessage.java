@@ -9,7 +9,7 @@ import java.io.IOException;
 import java.util.UUID;
 
 public class NotificationMessage extends ProtoMessage {
-    public static final short MSG_ID = 103;
+    public static final short MSG_ID = 105;
 
     private final UUID mid;
     private final Host sender;

@@ -435,19 +435,22 @@ public class ChordProtocol extends GenericProtocol {
 
     /* --------------------------------- Aux------------------------------- */
     private BigInteger getPreviousOnFingerTable(BigInteger val) {
-        BigInteger current = new BigInteger(String.valueOf(-1));
-        BigInteger max = new BigInteger(String.valueOf(-1));
-        List<BigInteger> keys = (List<BigInteger>) fingerTable.keySet();
-        for (BigInteger key : keys) {
-            if (key.compareTo(val) > 0)
-                current = key;
-            max = key;
+        if(!fingerTable.isEmpty()){
+            BigInteger current = new BigInteger(String.valueOf(-1));
+            BigInteger max = new BigInteger(String.valueOf(-1));
+            List<BigInteger> keys = (List<BigInteger>) fingerTable.keySet();
+            for (BigInteger key : keys) {
+                if (key.compareTo(val) > 0)
+                    current = key;
+                max = key;
+            }
+            if (current.equals(new BigInteger(String.valueOf(-1)))) {
+                return max;
+            } else {
+                return current;
+            }
         }
-        if (current.equals(new BigInteger(String.valueOf(-1)))) {
-            return max;
-        } else {
-            return current;
-        }
+        return null;
     }
 
     private void trySendMessage(ProtoMessage message, Host destination) {

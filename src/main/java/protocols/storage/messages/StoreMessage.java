@@ -13,7 +13,7 @@ import java.util.UUID;
 
 public class StoreMessage extends ProtoMessage {
 
-    public static final short MSG_ID = 201;
+    public static final short MSG_ID = 203;
 
     private final UUID mid;
     private final Host sender;

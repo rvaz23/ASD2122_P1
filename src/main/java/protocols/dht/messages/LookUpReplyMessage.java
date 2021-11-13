@@ -11,7 +11,7 @@ import java.util.UUID;
 
 public class LookUpReplyMessage extends ProtoMessage {
 
-    public static final short MSG_ID = 105;
+    public static final short MSG_ID = 103;
 
     private final UUID mid;
     private final Host sender;

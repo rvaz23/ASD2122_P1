@@ -9,7 +9,7 @@ import java.util.UUID;
 
 public class LookupReply extends ProtoReply {
 
-    final public static short REPLY_ID = 301;
+    final public static short REPLY_ID = 101;
 
     private BigInteger id;
     private UUID uid;

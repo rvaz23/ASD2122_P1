@@ -10,7 +10,7 @@ import java.util.UUID;
 
 public class FindPredecessorMessage extends ProtoMessage {
 
-    public static final short MSG_ID = 104;
+    public static final short MSG_ID = 101;
 
     private final UUID mid;
     private final Host sender;

@@ -6,7 +6,7 @@ import pt.unl.fct.di.novasys.babel.generic.ProtoRequest;
 
 public class StoreRequest extends ProtoRequest {
 
-	final public static short REQUEST_ID = 201;
+	final public static short REQUEST_ID = 202;
 	
 	private String name;
 	private byte[] content;

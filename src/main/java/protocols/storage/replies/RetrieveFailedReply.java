@@ -6,7 +6,7 @@ import pt.unl.fct.di.novasys.babel.generic.ProtoReply;
 
 public class RetrieveFailedReply extends ProtoReply {
 
-	final public static short REPLY_ID = 205;
+	final public static short REPLY_ID = 201;
 	
 	private String name;
 	private UUID uid;

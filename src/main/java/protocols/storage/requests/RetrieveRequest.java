@@ -6,7 +6,7 @@ import pt.unl.fct.di.novasys.babel.generic.ProtoRequest;
 
 public class RetrieveRequest extends ProtoRequest {
 
-	final public static short REQUEST_ID = 202;
+	final public static short REQUEST_ID = 201;
 	
 	private String name;
 	private UUID uid;

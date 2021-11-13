@@ -3,7 +3,7 @@ package protocols.apps.timers;
 import pt.unl.fct.di.novasys.babel.generic.ProtoTimer;
 
 public class StartTimer extends ProtoTimer {
-    public static final short TIMER_ID = 302;
+    public static final short TIMER_ID = 305;
 
     public StartTimer() {
         super(TIMER_ID);

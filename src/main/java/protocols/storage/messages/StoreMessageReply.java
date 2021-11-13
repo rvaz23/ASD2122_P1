@@ -10,7 +10,7 @@ import java.math.BigInteger;
 import java.util.UUID;
 
 public class StoreMessageReply extends ProtoMessage {
-    public static final short MSG_ID = 201;
+    public static final short MSG_ID = 204;
 
     private final UUID mid;
     private final Host sender;

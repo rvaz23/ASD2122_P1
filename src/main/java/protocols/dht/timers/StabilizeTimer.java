@@ -3,7 +3,7 @@ package protocols.dht.timers;
 import pt.unl.fct.di.novasys.babel.generic.ProtoTimer;
 
 public class StabilizeTimer extends ProtoTimer {
-    public static final short TIMER_ID = 102;
+    public static final short TIMER_ID = 103;
 
     public StabilizeTimer() {
         super(TIMER_ID);

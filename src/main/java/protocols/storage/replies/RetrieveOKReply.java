@@ -6,7 +6,7 @@ import pt.unl.fct.di.novasys.babel.generic.ProtoReply;
 
 public class RetrieveOKReply extends ProtoReply {
 
-	final public static short REPLY_ID = 204;
+	final public static short REPLY_ID = 202;
 	
 	private String name;
 	private byte[] content;
