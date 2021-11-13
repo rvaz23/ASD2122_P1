@@ -1,11 +1,12 @@
 package protocols.apps.chord;
 
 import channel.notifications.ChannelCreated;
+import channel.notifications.ConnectionUp;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import protocols.apps.timers.InfoTimer;
 import protocols.apps.timers.FixFingerTimer;
-import protocols.dht.FingerEntry;
+import protocols.dht.ConnectionEntry;
 import protocols.dht.messages.*;
 import protocols.dht.replies.LookupReply;
 import protocols.dht.requests.LookupRequest;
@@ -41,7 +42,7 @@ public class ChordProtocol extends GenericProtocol {
     private final Set<Host> connectedTo;                    //Peers I am connected to
     private final Set<Host> connectedFrom;                  //Peers connected to me
     private final HashMap<Host, Set<ProtoMessage>> pending; //Peers and respective pending messages to send
-    private HashMap<BigInteger, FingerEntry> fingerTable;   //Peers that I know from finger table
+    private HashMap<BigInteger, ConnectionEntry> fingerTable;   //Peers that I know from finger table
 
 
     private final int fixTime;  //param: timeout for fixFingersUpdate
@@ -66,7 +67,7 @@ public class ChordProtocol extends GenericProtocol {
         this.connectedFrom = new HashSet<>();
         this.pending = new HashMap<Host, Set<ProtoMessage>>();
         this.selfID = HashGenerator.generateHash(self.toString());
-        this.fingerTable = new HashMap<BigInteger, FingerEntry>();
+        this.fingerTable = new HashMap<BigInteger, ConnectionEntry>();
         SIZE = Integer.parseInt(properties.getProperty("finger_size", "5"));
         /*for (BigInteger finger : computeFingerNumbers(SIZE)) {
             fingerTable.put(new BigInteger(String.valueOf(finger)), null);
@@ -218,8 +219,8 @@ public class ChordProtocol extends GenericProtocol {
                 //adicionar a fingertable devera adicionar a entry(ofNode)
                 BigInteger pos = getPreviousOnFingerTable(HashGenerator.generateHash(msg.getSuccessor().toString()));
                 //fingerTable.put(msg.getOfNode(), msg.getSuccessor());
-                FingerEntry fingerEntry = new FingerEntry(System.currentTimeMillis(), msg.getSuccessor());
-                fingerTable.put(pos, fingerEntry);
+                ConnectionEntry connectionEntry = new ConnectionEntry(System.currentTimeMillis(), msg.getSuccessor());
+                fingerTable.put(pos, connectionEntry);
                 if (!connectedTo.contains(msg.getSuccessor())) {
                     openConnection(msg.getSuccessor());
                 }
@@ -268,6 +269,7 @@ public class ChordProtocol extends GenericProtocol {
 
     private void uponLookUpReplyMessage(LookUpReplyMessage msg, Host from, short sourceProto, int channelId) {
         LookupReply lookupReply = new LookupReply(msg.getContentHash(), msg.getContentOwner(), UUID.randomUUID());
+        openConnection(msg.getContentOwner());
         sendReply(lookupReply, storageProtoId);
     }
 
@@ -289,9 +291,9 @@ public class ChordProtocol extends GenericProtocol {
         //clean old entries on fingertable
         long currentTime = System.currentTimeMillis();
         for (BigInteger fkey : fingerTable.keySet()) {
-            FingerEntry fingerEntry = fingerTable.get(fkey);
-            if (currentTime - fingerEntry.getLastTimeRead() > 2 * fixTime) {
-                closeConnection(fingerEntry.getPeer());
+            ConnectionEntry connectionEntry = fingerTable.get(fkey);
+            if (currentTime - connectionEntry.getLastTimeRead() > 2 * fixTime) {
+                closeConnection(connectionEntry.getPeer());
                 fingerTable.remove(fkey);
             }
         }
@@ -351,7 +353,10 @@ public class ChordProtocol extends GenericProtocol {
     private void uponOutConnectionUp(OutConnectionUp event, int channelId) {
         Host peer = event.getNode();
         logger.debug("Connection to {} is up", peer);
-        connectedTo.add(peer);
+        if(connectedTo.add(peer)){
+            triggerNotification(new ConnectionUp(peer));
+        }
+
 
         //checks if there's pending messages to this new peer
         Set<ProtoMessage> pendingMessages = pending.get(peer);
@@ -366,19 +371,20 @@ public class ChordProtocol extends GenericProtocol {
             UUID uuid = UUID.randomUUID();
             FindSuccessorMessage findSuccessorMessage = new FindSuccessorMessage(uuid, self, selfID, PROTO_ID);
             trySendMessage(findSuccessorMessage, peer);
-            FingerEntry fingerEntry = new FingerEntry(System.currentTimeMillis(), peer);
-            fingerTable.put(selfID.add(new BigInteger("1")), fingerEntry);
+            ConnectionEntry connectionEntry = new ConnectionEntry(System.currentTimeMillis(), peer);
+            fingerTable.put(selfID.add(new BigInteger("1")), connectionEntry);
             successor = peer;
         }
 
         //if new peer not in finger, close connection
         boolean fingerTableContainsPeer = false;
-        for (FingerEntry fingerEntry : fingerTable.values()) {
-            if (fingerEntry.peer.equals(peer)) {
+        for (ConnectionEntry connectionEntry : fingerTable.values()) {
+            if (connectionEntry.peer.equals(peer)) {
                 fingerTableContainsPeer = true;
                 break;
             }
         }
+        //pode nao conseguir enviar a msg e acaba por perder, no caso por exemplo lookupreply
         if (!fingerTableContainsPeer)
             closeConnection(peer);
     }
@@ -454,6 +460,8 @@ public class ChordProtocol extends GenericProtocol {
         }
         return numbers;
     }
+
+
 
     private void uponChannelMetrics(ChannelMetrics event, int channelId) {
         StringBuilder sb = new StringBuilder("Channel Metrics:\n");

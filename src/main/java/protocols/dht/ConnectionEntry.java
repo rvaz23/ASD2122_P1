@@ -4,13 +4,13 @@ import pt.unl.fct.di.novasys.network.data.Host;
 
 import java.util.Timer;
 
-public class FingerEntry {
+public class ConnectionEntry {
 
     public long lastTimeRead;
 
     public Host peer;
 
-    public FingerEntry(long lastTimeRead, Host peer) {
+    public ConnectionEntry(long lastTimeRead, Host peer) {
         this.lastTimeRead = lastTimeRead;
         this.peer = peer;
     }
