@@ -94,8 +94,7 @@ public class StorageProtocol extends GenericProtocol {
         registerMessageSerializer(channelId, StoreMessageReply.MSG_ID, StoreMessageReply.serializer);
         registerMessageSerializer(channelId, RetrieveMessage.MSG_ID, RetrieveMessage.serializer);
         registerMessageSerializer(channelId, RetrieveResponseMessage.MSG_ID, RetrieveResponseMessage.serializer);
-        registerMessageSerializer(channelId, RetrieveMessage.MSG_ID, RetrieveMessage.serializer);
-        registerMessageSerializer(channelId, RetrieveResponseMessage.MSG_ID, RetrieveResponseMessage.serializer);
+
         /*---------------------- Register Message Handlers -------------------------- */
         try {
             /*---------------------- Register Message Handlers -------------------------- */
