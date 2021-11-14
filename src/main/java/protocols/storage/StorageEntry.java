@@ -25,5 +25,4 @@ public class StorageEntry {
         this.content = content;
     }
 
-
 }

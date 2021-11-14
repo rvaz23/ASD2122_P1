@@ -124,15 +124,17 @@ public class StorageProtocol extends GenericProtocol {
                 storage.put(reply.getID(), entry);
                 logger.info("{}: Store completed: {} ", self, entry.getName());
                 StoreOKReply storeOKReply = new StoreOKReply(entry.getName(), UUID.randomUUID());
-                sendReply(storeOKReply, sourceProto);
-                pendingToStore.remove(entry);
+                sendReply(storeOKReply, appProtoId);
+                pendingToStore.remove(reply.getID());
 
             } else {
+                logger.info("{}: Store message to {} (replyID {})", self, reply.getPeer(), reply.getReplyUID());
                 StoreMessage storeMessage = new StoreMessage(UUID.randomUUID(), self, sourceProto, reply.getID(), entry.getName(), entry.getContent());
                 trySendMessage(storeMessage, reply.getPeer());
             }
 
         } else {
+            logger.info("{}: Retrieve {} (replyID {})", self, reply.getPeer(), reply.getReplyUID());
             //obter conteudo de peer send retrieve message
             RetrieveMessage retrieveMessage = new RetrieveMessage(reply.getReplyUID(), self, PROTO_ID, reply.getID());
             trySendMessage(retrieveMessage, reply.getPeer());
@@ -142,7 +144,8 @@ public class StorageProtocol extends GenericProtocol {
 
     /*--------------------------------- Requests ---------------------------------------- */
     private void uponStoreRequest(StoreRequest request, short sourceProto) {
-        BigInteger idHash = HashGenerator.generateHash(request.getName());
+        logger.info("Store request from app");
+        BigInteger idHash = HashGenerator.positiveBig(HashGenerator.generateHash(request.getName()));
         StorageEntry storageEntry = new StorageEntry(request.getName(), request.getContent());
         pendingToStore.put(idHash, storageEntry);
         LookupRequest lookupRequest = new LookupRequest(idHash, UUID.randomUUID());
@@ -151,7 +154,7 @@ public class StorageProtocol extends GenericProtocol {
     }
 
     private void uponRetrieveRequest(RetrieveRequest request, short sourceProto) {
-        BigInteger id = HashGenerator.generateHash(request.getName());
+        BigInteger id = HashGenerator.positiveBig(HashGenerator.generateHash(request.getName()));
         if (storage.containsKey(id)) {
             StorageEntry storageEntry = storage.get(id);
             RetrieveOKReply retrieveOk = new RetrieveOKReply(storageEntry.getName(), request.getRequestUID(), storageEntry.getContent());
@@ -166,6 +169,7 @@ public class StorageProtocol extends GenericProtocol {
     /*--------------------------------- Messages ---------------------------------------- */
 
     private void uponStoreMessage(StoreMessage msg, Host from, short sourceProto, int channelId) {
+        logger.info("Recebeu store de {}, self: : ",msg.getSender(),self);
         if (!channelReady) return;
         StorageEntry storageEntry = new StorageEntry(msg.getContentName(), msg.getContent());
         storage.put(msg.getHash(), storageEntry);
@@ -180,8 +184,8 @@ public class StorageProtocol extends GenericProtocol {
         if (entry != null) {
             logger.info("{}: Store completed: {} ", self, entry.getName());
             StoreOKReply storeOKReply = new StoreOKReply(entry.getName(), UUID.randomUUID());
-            sendReply(storeOKReply, sourceProto);
-            pendingToStore.remove(entry);
+            sendReply(storeOKReply, appProtoId);
+            pendingToStore.remove(reply.getHash());
         }
     }
 
@@ -227,17 +231,18 @@ public class StorageProtocol extends GenericProtocol {
     }
 
     private void trySendMessage(ProtoMessage message, Host destination) {
-        if (connections.contains(destination))
+        if (connections.contains(destination)){
             //there's an open connection to the destination
-            sendMessage(message, destination);
-        else {
+            logger.info("Envia para : " + destination);
+        sendMessage(message, destination);
+    }else {
             //there's no open connection to the destination. need to open one
             Set<ProtoMessage> pendingMessages = pending.get(destination);
             if (pendingMessages == null)
                 pendingMessages = new HashSet<>();
             pendingMessages.add(message);
             pending.put(destination, pendingMessages);
-            openConnection(destination);
+            //openConnection(destination);
         }
     }
 

@@ -103,6 +103,9 @@ public class AutomatedApplication extends GenericProtocol {
 	}
 
 	private void uponChannelCreated(ChannelCreated notification, short sourceProto) {
+		int channelId = notification.getChannelId();
+		// Allows this protocol to receive events from this channel.
+		registerSharedChannel(channelId);
 		try {
 			registerChannelEventHandler(notification.getChannelId(), ChannelMetrics.EVENT_ID, this::uponChannelMetrics);
 		} catch (HandlerRegistrationException e) {

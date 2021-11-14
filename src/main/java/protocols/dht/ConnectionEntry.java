@@ -2,7 +2,6 @@ package protocols.dht;
 
 import pt.unl.fct.di.novasys.network.data.Host;
 
-import java.util.Timer;
 
 public class ConnectionEntry {
 

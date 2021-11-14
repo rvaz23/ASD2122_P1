@@ -42,6 +42,7 @@ public class ChordProtocol extends GenericProtocol {
     private Host self;
     private final Map<Host, Long> connectedTo;                    //Peers I am connected to
     private final Set<Host> connectedFrom;                  //Peers connected to me
+    private Set<Host> succcessors;
     private final HashMap<Host, Set<ProtoMessage>> pending; //Peers and respective pending messages to send
     private HashMap<BigInteger, ConnectionEntry> fingerTable;   //Peers that I know from finger table
 
@@ -66,6 +67,7 @@ public class ChordProtocol extends GenericProtocol {
         this.storageProtoId = storageProtoId;
         this.connectedTo = new HashMap<Host, Long>();
         this.connectedFrom = new HashSet<>();
+        this.succcessors = new HashSet<>();
         this.pending = new HashMap<Host, Set<ProtoMessage>>();
         this.selfID = HashGenerator.positiveBig(HashGenerator.generateHash(self.toString()));
         System.out.println(selfID);
@@ -167,10 +169,7 @@ public class ChordProtocol extends GenericProtocol {
     private void uponFindSuccessor(FindSuccessorMessage msg, Host from, short sourceProto, int channelId) {
         BigInteger key = getPreviousOnFingerTable(msg.getOfNode());
         ConnectionEntry nodeToAsk = fingerTable.get(key);
-        logger.info("Find message received id:{} ,from:{}", msg.getOfNode(), msg.getSender());
-        if (msg.getOfNode().compareTo(new BigInteger("1")) == 0) {
-            logger.info("1 veio do {} original de  {}", from, msg.getSender());
-        }
+        logger.debug("Find message received id:{} ,from:{}", msg.getOfNode(), msg.getSender());
 
         if (nodeToAsk == null && successor == null) {
             SuccessorFoundMessage successorFoundMessage = new SuccessorFoundMessage(msg.getMid(), self, msg.getOfNode(), msg.getToDeliver());
@@ -233,7 +232,7 @@ public class ChordProtocol extends GenericProtocol {
         }
 
         if (nodeToAsk != null) {
-            logger.info("resend to finger {} ", nodeToAsk.getPeer());
+            logger.debug("resend to finger {} ", nodeToAsk.getPeer());
             updateConnected(nodeToAsk.getPeer());
             trySendMessage(msg, nodeToAsk.getPeer());
         } else {
@@ -316,7 +315,7 @@ public class ChordProtocol extends GenericProtocol {
 
             //Refactor finger table, when completes ring cycle
             BigInteger index = msg.getOfNode().remainder(HashGenerator.positiveBig(HashGenerator.generateHash(from.toString())));
-            logger.info("Remap do {} , to {} vindo de:", msg.getOfNode(), index, from.toString());
+            logger.debug("Remap do {} , to {} vindo de:", msg.getOfNode(), index, from.toString());
             FindSuccessorMessage findSuccessorMessage = new FindSuccessorMessage(UUID.randomUUID(), self, index, PROTO_ID);
             if (from.equals(self)) {
                 uponFindSuccessor(findSuccessorMessage, self, PROTO_ID, channelId);
@@ -325,7 +324,7 @@ public class ChordProtocol extends GenericProtocol {
                 trySendMessage(findSuccessorMessage, from);
             }
         } else {
-            logger.info("Inserting finger do {} , to {}", msg.getOfNode(), msg.getSuccessor());
+            logger.debug("Inserting finger do {} , to {}", msg.getOfNode(), msg.getSuccessor());
             //adicionar a fingertable devera adicionar a entry(ofNode)
             BigInteger pos = getPreviousOnFingerTable(HashGenerator.positiveBig(HashGenerator.generateHash(msg.getSuccessor().toString())));
             //
@@ -338,12 +337,23 @@ public class ChordProtocol extends GenericProtocol {
     }
 
     private void uponFindPredecessor(FindPredecessorMessage msg, Host from, short sourceProto, int channelId) {
-        PredecessorFoundMessage predecessorFoundMessage = new PredecessorFoundMessage(msg.getMid(), predecessor, msg.getToDeliver());
+        Set<Host> suc =new HashSet<>();
+        suc.add(successor);
+        PredecessorFoundMessage predecessorFoundMessage = new PredecessorFoundMessage(msg.getMid(), predecessor, suc, msg.getToDeliver());
         updateConnected(msg.getSender());
         trySendMessage(predecessorFoundMessage, msg.getSender());
     }
 
     private void uponFoundPredecessor(PredecessorFoundMessage msg, Host from, short sourceProto, int channelId) {
+        succcessors = new HashSet<>();
+        succcessors.add(successor);
+        for (Host h: msg.getSuccessors()){
+            succcessors.add(h);
+        }
+
+        for(Host h :succcessors){
+            logger.info("Successors in list: {}",h);
+        }
 
         if (msg.getPredecessor().equals(self))
             return;
@@ -374,19 +384,33 @@ public class ChordProtocol extends GenericProtocol {
     }
 
     private void uponLookUpRequestMessage(LookUpRequestMessage msg, Host from, short sourceProto, int channelId) {
-        if (selfID.compareTo(HashGenerator.positiveBig(HashGenerator.generateHash(msg.getContentHash().toString()))) < 0) {
-            BigInteger bigSuccessor = HashGenerator.positiveBig(HashGenerator.generateHash(successor.toString()));
-            int cmp1 = bigSuccessor.compareTo(HashGenerator.positiveBig(HashGenerator.generateHash(msg.getContentHash().toString())));
-            int cmp2 = bigSuccessor.compareTo(selfID);
-            if (cmp1 >= 0 || cmp2 < 0) {
-                LookUpReplyMessage lookUpReplyMessage = new LookUpReplyMessage(UUID.randomUUID(), self, self, msg.getContentHash(), PROTO_ID);
-                updateConnected(msg.getSender());
-                trySendMessage(lookUpReplyMessage, msg.getSender());
+        BigInteger bigSuccessor = HashGenerator.positiveBig(HashGenerator.generateHash(successor.toString()));
+        int cmp1 = bigSuccessor.compareTo(msg.getContentHash());
+        int cmp2 = bigSuccessor.compareTo(selfID);
+        if (selfID.compareTo(msg.getContentHash()) < 0) {
+            if (cmp1 > 0 || cmp2 < 0) {
+                LookUpReplyMessage lookupReply = new LookUpReplyMessage(UUID.randomUUID(),self,self,msg.getContentHash(),PROTO_ID);
+                trySendMessage(lookupReply,msg.getSender());
+                logger.info("lookup 1 from {} going to {}",msg.getSender(),self);
                 return;
             }
+        }else{
+            if(cmp1>0 && cmp2 <0){
+                LookUpReplyMessage lookupReply = new LookUpReplyMessage(UUID.randomUUID(),self,self,msg.getContentHash(),PROTO_ID);
+                trySendMessage(lookupReply,msg.getSender());
+                logger.info("lookup 2 from {} going to {}",msg.getSender(),self);
+                return;
+            }
+            return;
         }
-        BigInteger key = getPreviousOnFingerTable(msg.getContentHash());
-        trySendMessage(msg, fingerTable.get(key).getPeer());
+        logger.info("lookup from {} going to {}",msg.getSender(),self);
+
+        ConnectionEntry entry = fingerTable.get(getPreviousOnFingerTable(msg.getContentHash()));
+        if(entry!=null){
+            trySendMessage(msg, entry.getPeer());
+        }else{
+            trySendMessage(msg,successor);
+        }
     }
 
     private void uponLookUpReplyMessage(LookUpReplyMessage msg, Host from, short sourceProto, int channelId) {
@@ -399,7 +423,7 @@ public class ChordProtocol extends GenericProtocol {
 
     //TODO Faz sentido fazer update da conexao na fix fingers
     //Todo ao atualizar nunca é removido se ja não for o correto
-    private void uponFixFinger(protocols.dht.timers.FixFingerTimer timer, long timerId) {
+    private void uponFixFinger(FixFingerTimer timer, long timerId) {
         BigInteger[] fingers = computeFingerNumbers(SIZE);
         if (!fingerTable.isEmpty() || successor != null) {
             for (BigInteger key : fingers) {
@@ -408,10 +432,10 @@ public class ChordProtocol extends GenericProtocol {
                 BigInteger val = getPreviousOnFingerTable(key);
                 ConnectionEntry host = fingerTable.get(val);
                 if (host == null) {
-                    System.out.println("procurar " + keyBigInteger + " no sucessor");
+                    //System.out.println("procurar " + keyBigInteger + " no sucessor");
                     trySendMessage(findSuccessorMessage, successor);
                 } else {
-                    System.out.println("procurar " + keyBigInteger + " no " + host.getPeer());
+                    //System.out.println("procurar " + keyBigInteger + " no " + host.getPeer());
                     trySendMessage(findSuccessorMessage, host.getPeer());
                 }
             }
@@ -423,7 +447,7 @@ public class ChordProtocol extends GenericProtocol {
         if (!fingerTable.isEmpty()) {
             for (BigInteger fkey : fingerTable.keySet()) {
                 ConnectionEntry connectionEntry = fingerTable.get(fkey);
-                System.out.println(fkey + ": " + connectionEntry.peer.toString());
+                //System.out.println(fkey + ": " + connectionEntry.peer.toString());
                 if (currentTime - connectionEntry.getLastTimeRead() > 10 * fixTime) {
                     closeConnection(connectionEntry.getPeer());
                     fingerTable.remove(fkey);
@@ -482,22 +506,28 @@ public class ChordProtocol extends GenericProtocol {
         //have list of successors makes it easier
         //checks if the peer is my successor
         if (peer.equals(successor)) {
+            /*
             BigInteger firstFingerKey = (BigInteger) fingerTable.keySet().toArray()[0];
 
             //checks if my first finger isn't the failed successor
             if (bigPeer.compareTo(firstFingerKey) == 0)
                 firstFingerKey = (BigInteger) fingerTable.keySet().toArray()[1];
 
-            Host firstFinger = fingerTable.get(firstFingerKey).getPeer();
-            FindSuccessorMessage findSuccessorMessage =
-                    new FindSuccessorMessage(UUID.randomUUID(), self, firstFingerKey, PROTO_ID);
-            trySendMessage(findSuccessorMessage, firstFinger);
+            Host firstFinger = fingerTable.get(firstFingerKey).getPeer();*/
+
+            succcessors.remove(successor);
+            Optional<Host> newSuccessor =succcessors.stream().findFirst();
+            if (newSuccessor.isPresent()){
+                FindSuccessorMessage findSuccessorMessage =
+                        new FindSuccessorMessage(UUID.randomUUID(), self, selfID, PROTO_ID);
+                trySendMessage(findSuccessorMessage, newSuccessor.get());
+            }
+
         }
         if(!fingerTable.isEmpty()){
             for(BigInteger key : fingerTable.keySet()){
                 if (fingerTable.get(key).getPeer().equals(peer)){
                     fingerTable.remove(key);
-                    connectedTo.remove(connectedTo.get(peer));
                 }
             }
         }
@@ -534,6 +564,9 @@ public class ChordProtocol extends GenericProtocol {
             //successor = peer;
         }
 
+
+
+
         //if new peer not in finger, close connection
         boolean fingerTableContainsPeer = false;
         for (ConnectionEntry connectionEntry : fingerTable.values()) {
@@ -563,19 +596,31 @@ public class ChordProtocol extends GenericProtocol {
 
     /*--------------------------------- Requests ---------------------------------------- */
     private void uponLookUpRequest(LookupRequest request, short sourceProto) {
-        if (selfID.compareTo(HashGenerator.positiveBig(HashGenerator.generateHash(request.getID().toString()))) < 0) {
-            BigInteger bigSuccessor = HashGenerator.positiveBig(HashGenerator.generateHash(successor.toString()));
-            int cmp1 = bigSuccessor.compareTo(HashGenerator.positiveBig(HashGenerator.generateHash(request.getID().toString())));
-            int cmp2 = bigSuccessor.compareTo(selfID);
-            if (cmp1 >= 0 || cmp2 < 0) {
+        BigInteger bigSuccessor = HashGenerator.positiveBig(HashGenerator.generateHash(successor.toString()));
+        int cmp1 = bigSuccessor.compareTo(request.getID());
+        int cmp2 = bigSuccessor.compareTo(selfID);
+        if (selfID.compareTo(request.getID()) < 0) {
+            if (cmp1 > 0 || cmp2 < 0) {
                 LookupReply lookupReply = new LookupReply(request.getID(), self, UUID.randomUUID());
                 sendReply(lookupReply, storageProtoId);
                 return;
             }
+        }else{
+            if(cmp1>0 && cmp2 <0){
+                LookupReply lookupReply = new LookupReply(request.getID(), self, UUID.randomUUID());
+                sendReply(lookupReply, storageProtoId);
+                return;
+            }
+            return;
         }
+
         LookUpRequestMessage lookUpRequestMessage = new LookUpRequestMessage(UUID.randomUUID(), self, request.getID(), PROTO_ID);
-        Host peer = fingerTable.get(getPreviousOnFingerTable(request.getID())).getPeer();
-        trySendMessage(lookUpRequestMessage, peer);
+        ConnectionEntry entry = fingerTable.get(getPreviousOnFingerTable(request.getID()));
+        if(entry!=null){
+            trySendMessage(lookUpRequestMessage, entry.getPeer());
+        }else{
+            trySendMessage(lookUpRequestMessage,successor);
+        }
     }
 
     /* --------------------------------- Aux------------------------------- */
@@ -597,7 +642,7 @@ public class ChordProtocol extends GenericProtocol {
 
     private void trySendMessage(ProtoMessage message, Host destination) {
         if (connectedTo.containsKey(destination)) {
-            logger.info("Sending to {} message", destination);
+            logger.debug("Sending to {} message", destination);
             //there's an open connection to the destination
             sendMessage(message, destination);
         } else {
