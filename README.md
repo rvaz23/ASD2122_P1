@@ -7,5 +7,10 @@ The source code should not be used for any other purpose other than the realizat
 
 mvn package
 
-java -jar target/asdProj.jar -conf babel_config.properties address=localhost port=9999 contact=192.168.0.12:9998 my_index=1 | tee results/results-localhost-1.txt
+java -jar target/asdProj.jar -conf babel_config.properties address=localhost port=9999 contact=192.168.1.89:9998 my_index=1 | tee results/results-localhost-1.txt
 
+java -jar target/asdProj.jar -conf babel_config.properties address=localhost port=9998 contact=192.168.1.89:9999 my_index=1 | tee results/results-localhost-1.txt
+
+java -jar target/asdProj.jar -conf babel_config.properties address=localhost port=9997 contact=192.168.1.89:9999 my_index=1 | tee results/results-localhost-1.txt
+
+java -jar target/asdProj.jar -conf babel_config.properties address=localhost port=9996 contact=192.168.1.89:9999 my_index=1 | tee results/results-localhost-1.txt
