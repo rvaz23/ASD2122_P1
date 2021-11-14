@@ -22,6 +22,9 @@ public class HashGenerator {
 		return null;
 	}
 
+	public static BigInteger positiveBig(BigInteger bInt) {
+		return bInt.multiply(BigInteger.valueOf(bInt.signum()));
+	}
 
 
 }
