@@ -28,7 +28,7 @@ public class StoreMessage extends ProtoMessage {
 
     @Override
     public String toString() {
-        return "RetrieveMessage{" +
+        return "Store Message{" +
                 "mid=" + mid +
                 '}';
     }

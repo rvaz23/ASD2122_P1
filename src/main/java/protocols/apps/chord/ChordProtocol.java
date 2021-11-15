@@ -1,6 +1,7 @@
 package protocols.apps.chord;
 
 import channel.notifications.ChannelCreated;
+import channel.notifications.ConnectionDown;
 import channel.notifications.ConnectionUp;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -348,6 +349,7 @@ public class ChordProtocol extends GenericProtocol {
         succcessors = new HashSet<>();
         succcessors.add(successor);
         for (Host h: msg.getSuccessors()){
+            if(!h.equals(self))
             succcessors.add(h);
         }
 
@@ -389,10 +391,14 @@ public class ChordProtocol extends GenericProtocol {
         int cmp2 = bigSuccessor.compareTo(selfID);
         if (selfID.compareTo(msg.getContentHash()) < 0) {
             if (cmp1 > 0 || cmp2 < 0) {
-                LookUpReplyMessage lookupReply = new LookUpReplyMessage(UUID.randomUUID(),self,self,msg.getContentHash(),PROTO_ID);
-                trySendMessage(lookupReply,msg.getSender());
-                logger.info("lookup 1 from {} going to {}",msg.getSender(),self);
-                return;
+                if(self.equals(msg.getSender())){
+
+                }else{
+                    LookUpReplyMessage lookupReply = new LookUpReplyMessage(UUID.randomUUID(),self,self,msg.getContentHash(),PROTO_ID);
+                    trySendMessage(lookupReply,msg.getSender());
+                    logger.info("lookup 1 from {} going to {}",msg.getSender(),self);
+                    return;
+                }
             }
         }else{
             if(cmp1>0 && cmp2 <0){
@@ -401,7 +407,7 @@ public class ChordProtocol extends GenericProtocol {
                 logger.info("lookup 2 from {} going to {}",msg.getSender(),self);
                 return;
             }
-            return;
+
         }
         logger.info("lookup from {} going to {}",msg.getSender(),self);
 
@@ -415,7 +421,7 @@ public class ChordProtocol extends GenericProtocol {
 
     private void uponLookUpReplyMessage(LookUpReplyMessage msg, Host from, short sourceProto, int channelId) {
         LookupReply lookupReply = new LookupReply(msg.getContentHash(), msg.getContentOwner(), UUID.randomUUID());
-        updateConnected(msg.getContentOwner());
+        updateConnected(from);
         sendReply(lookupReply, storageProtoId);
     }
 
@@ -502,6 +508,8 @@ public class ChordProtocol extends GenericProtocol {
     private void uponOutConnectionDown(OutConnectionDown event, int channelId) {
         Host peer = event.getNode();
         logger.info("Connection to {} is down cause {}", peer, event.getCause());
+
+        triggerNotification(new ConnectionDown(peer));
         BigInteger bigPeer = HashGenerator.positiveBig(HashGenerator.generateHash(peer.toString()));
         //have list of successors makes it easier
         //checks if the peer is my successor
@@ -518,9 +526,7 @@ public class ChordProtocol extends GenericProtocol {
             succcessors.remove(successor);
             Optional<Host> newSuccessor =succcessors.stream().findFirst();
             if (newSuccessor.isPresent()){
-                FindSuccessorMessage findSuccessorMessage =
-                        new FindSuccessorMessage(UUID.randomUUID(), self, selfID, PROTO_ID);
-                trySendMessage(findSuccessorMessage, newSuccessor.get());
+                successor=newSuccessor.get();
             }
 
         }

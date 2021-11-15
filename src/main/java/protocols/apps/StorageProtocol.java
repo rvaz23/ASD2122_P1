@@ -61,6 +61,7 @@ public class StorageProtocol extends GenericProtocol {
         this.pending = new HashMap<Host, Set<ProtoMessage>>();
         this.channelReady=false;
 
+
         /*--------------------- Register Request Handlers ----------------------------- */
         registerRequestHandler(StoreRequest.REQUEST_ID, this::uponStoreRequest);
         registerRequestHandler(RetrieveRequest.REQUEST_ID, this::uponRetrieveRequest);
@@ -86,22 +87,22 @@ public class StorageProtocol extends GenericProtocol {
     }
 
     private void uponChannelCreated(ChannelCreated notification, short sourceProto) {
-        int channelId = notification.getChannelId();
+        int cId = notification.getChannelId();
         // Allows this protocol to receive events from this channel.
-        registerSharedChannel(channelId);
+        registerSharedChannel(cId);
         /*---------------------- Register Message Serializers ---------------------- */
-        registerMessageSerializer(channelId, StoreMessage.MSG_ID, StoreMessage.serializer);
-        registerMessageSerializer(channelId, StoreMessageReply.MSG_ID, StoreMessageReply.serializer);
-        registerMessageSerializer(channelId, RetrieveMessage.MSG_ID, RetrieveMessage.serializer);
-        registerMessageSerializer(channelId, RetrieveResponseMessage.MSG_ID, RetrieveResponseMessage.serializer);
+        registerMessageSerializer(cId, StoreMessage.MSG_ID, StoreMessage.serializer);
+        registerMessageSerializer(cId, StoreMessageReply.MSG_ID, StoreMessageReply.serializer);
+        registerMessageSerializer(cId, RetrieveMessage.MSG_ID, RetrieveMessage.serializer);
+        registerMessageSerializer(cId, RetrieveResponseMessage.MSG_ID, RetrieveResponseMessage.serializer);
 
         /*---------------------- Register Message Handlers -------------------------- */
         try {
             /*---------------------- Register Message Handlers -------------------------- */
-            registerMessageHandler(channelId, StoreMessage.MSG_ID, this::uponStoreMessage);
-            registerMessageHandler(channelId, StoreMessageReply.MSG_ID, this::uponStoreMessageReply);
-            registerMessageHandler(channelId, RetrieveMessage.MSG_ID, this::uponRetrieveMessage);
-            registerMessageHandler(channelId, RetrieveResponseMessage.MSG_ID, this::uponRetrieveResponseMessage);
+            registerMessageHandler(cId, StoreMessage.MSG_ID, this::uponStoreMessage);
+            registerMessageHandler(cId, StoreMessageReply.MSG_ID, this::uponStoreMessageReply);
+            registerMessageHandler(cId, RetrieveMessage.MSG_ID, this::uponRetrieveMessage);
+            registerMessageHandler(cId, RetrieveResponseMessage.MSG_ID, this::uponRetrieveResponseMessage);
         } catch (HandlerRegistrationException e) {
             logger.error("Error registering message handler: " + e.getMessage());
             e.printStackTrace();
@@ -130,14 +131,14 @@ public class StorageProtocol extends GenericProtocol {
             } else {
                 logger.info("{}: Store message to {} (replyID {})", self, reply.getPeer(), reply.getReplyUID());
                 StoreMessage storeMessage = new StoreMessage(UUID.randomUUID(), self, sourceProto, reply.getID(), entry.getName(), entry.getContent());
-                trySendMessage(storeMessage, reply.getPeer());
+                    trySendMessage(storeMessage, reply.getPeer());
             }
 
         } else {
             logger.info("{}: Retrieve {} (replyID {})", self, reply.getPeer(), reply.getReplyUID());
             //obter conteudo de peer send retrieve message
-            RetrieveMessage retrieveMessage = new RetrieveMessage(reply.getReplyUID(), self, PROTO_ID, reply.getID());
-            trySendMessage(retrieveMessage, reply.getPeer());
+            //RetrieveMessage retrieveMessage = new RetrieveMessage(reply.getReplyUID(), self, PROTO_ID, reply.getID());
+            //trySendMessage(retrieveMessage, reply.getPeer());
 
         }
     }
@@ -173,9 +174,14 @@ public class StorageProtocol extends GenericProtocol {
         if (!channelReady) return;
         StorageEntry storageEntry = new StorageEntry(msg.getContentName(), msg.getContent());
         storage.put(msg.getHash(), storageEntry);
-        ConnectionEntry connectionEntry = new ConnectionEntry(System.currentTimeMillis(), msg.getSender());
-        StoreMessageReply storeMessageReply = new StoreMessageReply(UUID.randomUUID(), self, sourceProto, msg.getHash());
-        trySendMessage(storeMessageReply, msg.getSender());
+        if(!self.equals(msg.getSender())){
+            StoreMessageReply storeMessageReply = new StoreMessageReply(UUID.randomUUID(), self, getProtoId(), msg.getHash());
+            trySendMessage(storeMessageReply, msg.getSender());
+        }else{
+            StoreOKReply ok = new StoreOKReply(storageEntry.getName(), UUID.randomUUID());
+            sendReply(ok,appProtoId);
+        }
+
     }
 
     private void uponStoreMessageReply(StoreMessageReply reply, Host from, short sourceProto, int channelId) {
@@ -194,7 +200,7 @@ public class StorageProtocol extends GenericProtocol {
         if (!channelReady) return;
         StorageEntry storageEntry = storage.get(msg.getCid());
         if (storageEntry != null) {
-            RetrieveResponseMessage retrieveResponseMessage = new RetrieveResponseMessage(UUID.randomUUID(), self, sourceProto, msg.getCid(), storageEntry.getName(), storageEntry.getContent());
+            RetrieveResponseMessage retrieveResponseMessage = new RetrieveResponseMessage(UUID.randomUUID(), self, getProtoId(), msg.getCid(), storageEntry.getName(), storageEntry.getContent());
             trySendMessage(retrieveResponseMessage, msg.getSender());
         } else {
             //TODO retornar msg conteudo vazio???
@@ -235,6 +241,7 @@ public class StorageProtocol extends GenericProtocol {
             //there's an open connection to the destination
             logger.info("Envia para : " + destination);
         sendMessage(message, destination);
+
     }else {
             //there's no open connection to the destination. need to open one
             Set<ProtoMessage> pendingMessages = pending.get(destination);
